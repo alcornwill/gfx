@@ -1,0 +1,711 @@
+
+#include <SDL.h>
+#include <SDL_image.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include "gfx.h"
+
+const Vec2 g_sprite_shapes[12] = {
+    {1, 1}, {2, 2}, {4, 4}, {8, 8},
+    {2, 1}, {4, 1}, {4, 2}, {8, 4},
+    {1, 2}, {1, 4}, {2, 4}, {4, 8}
+};
+
+const int g_keymap[8] = {
+    KM_UP,
+    KM_DOWN,
+    KM_LEFT,
+    KM_RIGHT,
+    KM_A,
+    KM_B,
+    KM_START,
+    KM_SELECT
+};
+
+int g_window_width = 512;
+int g_window_height = 512;
+
+SDL_Texture *load_texture( char *path );
+SDL_Window *g_window = NULL;
+SDL_Renderer *g_renderer = NULL;
+SDL_Texture *g_spritesheet_texture = NULL;
+SDL_Texture *g_spritesheet_texture_nk = NULL;
+SDL_Texture *g_spritesheet_texture_k = NULL;
+SDL_Texture *g_render_texture = NULL;
+unsigned char g_map[MAP_LENGTH] = {0};
+unsigned char g_keys[8] = {0};
+int g_keysdown[8] = {0};
+int g_keysup[8] = {0};
+int g_frame = 0;
+float g_time = 0;
+float g_dt = 0;
+Vec2 g_cursor = {0, 0}; // text cursor
+Vec2 g_camera = {0, 0};
+void (*user_init)() = NULL;
+void (*user_update)() = NULL;
+
+WavBuffer g_wavbuffers[NUM_WAVBUFFER] = {0};
+unsigned char *g_audio_pos = NULL;
+unsigned int g_audio_len = 0;
+float g_volume = 1.0f;
+
+void play_wav(int index) {
+    WavBuffer *wav = &g_wavbuffers[index];
+    g_audio_len = wav->length;
+    g_audio_pos = wav->buffer;
+    SDL_PauseAudio(0);
+}
+
+void my_audio_callback(void *userdata, unsigned char *stream, int len) {
+    SDL_memset(stream, 0, len);
+
+	if (g_audio_len ==0)
+		return;
+	
+	len = len > g_audio_len ? g_audio_len : len;
+	SDL_MixAudio(stream, g_audio_pos, len, SDL_MIX_MAXVOLUME * g_volume);
+	
+	g_audio_pos += len;
+    g_audio_len -= len;
+    
+    // if (g_loop && g_audio_len <= 0) {
+        // g_audio_len = g_wav_length;
+        // g_audio_pos = g_wav_buffer;
+    // }
+}
+
+Color g_palette[16] = {
+    BLACK, WHITE, RED, CYAN, 
+    VIOLET, GREEN, BLUE, YELLOW, 
+    ORANGE, BROWN, PINK, DK_GREY, 
+    GREY, LT_GREEN, LT_BLUE, LT_GREY
+};
+
+int gfx_get_key(int i) {
+    return g_keys[g_keymap[i]];
+}
+
+int gfx_get_keydown(int i) {
+    return g_keysdown[i];
+}
+
+int gfx_get_keyup(int i) {
+    return g_keysup[i];
+}
+
+void gfx_set_map(int x, int y, unsigned int value) {
+    int i = (y * MAP_WIDTH) + x;
+    if (i >= 0 && i < MAP_LENGTH)
+        g_map[i] = value & 0xF;
+}
+
+int gfx_read_map() {
+    FILE *file = NULL;
+    file = fopen(MAP_PATH, "r");
+    if (!file) {
+        printf("Failed to read tilemap!\n");
+        return 0;
+    }
+    fread(g_map, 1, MAP_LENGTH, file);
+    fclose(file);
+    return 1;
+}
+
+int gfx_write_map() {
+    FILE *file = NULL;
+    file = fopen(MAP_PATH, "w");
+    if (!file) {
+        printf(" Failed to write tilemap!\n");
+        return 0;
+    }
+    fwrite(g_map, 1, MAP_LENGTH, file);
+    fclose(file);
+    return 1;
+}
+
+void gfx_set_color(int i) {
+    Color c = g_palette[i];
+    SDL_SetRenderDrawColor( g_renderer, c.r, c.g, c.b, c.a );
+    // also modulate texture
+    SDL_SetTextureColorMod( g_spritesheet_texture_nk, c.r, c.g, c.b);
+    SDL_SetTextureColorMod( g_spritesheet_texture_k, c.r, c.g, c.b);
+}
+
+void gfx_set_key(int value) {
+    // turn chroma key on/off (transparency)
+    g_spritesheet_texture = value ? g_spritesheet_texture_k : g_spritesheet_texture_nk;
+}
+
+void gfx_clear() {
+    SDL_RenderClear( g_renderer );
+}
+
+void gfx_draw_rect(int x, int y, int w, int h) {
+    // it is better to use a global rect than allocating memory on stack?
+    x -= g_camera.x;
+    y -= g_camera.y;
+    SDL_Rect rect = { x, y, w, h };		
+    SDL_RenderDrawRect( g_renderer, &rect );
+}
+
+void gfx_draw_rect_fill(int x, int y, int w, int h) {
+    x -= g_camera.x;
+    y -= g_camera.y;
+    SDL_Rect rect = { x, y, w, h };		
+    SDL_RenderFillRect( g_renderer, &rect );
+}
+
+void gfx_draw_line(int x1, int y1, int x2, int y2) {
+    x1 -= g_camera.x;
+    y1 -= g_camera.y;
+    x2 -= g_camera.x;
+    y2 -= g_camera.y;
+    SDL_RenderDrawLine( g_renderer, x1, y1, x2, y2);
+}
+
+void gfx_draw_point(int x, int y) {
+    x -= g_camera.x;
+    y -= g_camera.y;
+    SDL_RenderDrawPoint( g_renderer, x, y);
+}
+
+void gfx_draw_circ(int x0, int y0, int radius)
+{
+    x0 -= g_camera.x;
+    y0 -= g_camera.y;
+    int x = radius-1;
+    int y = 0;
+    int dx = 1;
+    int dy = 1;
+    int err = dx - (radius << 1);
+
+    while (x >= y)
+    {
+        SDL_RenderDrawPoint( g_renderer, x0 + x, y0 + y);
+        SDL_RenderDrawPoint( g_renderer, x0 + y, y0 + x);
+        SDL_RenderDrawPoint( g_renderer, x0 - y, y0 + x);
+        SDL_RenderDrawPoint( g_renderer, x0 - x, y0 + y);
+        SDL_RenderDrawPoint( g_renderer, x0 - x, y0 - y);
+        SDL_RenderDrawPoint( g_renderer, x0 - y, y0 - x);
+        SDL_RenderDrawPoint( g_renderer, x0 + y, y0 - x);
+        SDL_RenderDrawPoint( g_renderer, x0 + x, y0 - y);
+
+        if (err <= 0)
+        {
+            y++;
+            err += dy;
+            dy += 2;
+        }
+        if (err > 0)
+        {
+            x--;
+            dx += 2;
+            err += dx - (radius << 1);
+        }
+    }
+}
+
+void gfx_draw_circ_fill(int x0, int y0, int radius)
+{
+    x0 -= g_camera.x;
+    y0 -= g_camera.y;
+    int x = radius-1;
+    int y = 0;
+    int dx = 1;
+    int dy = 1;
+    int err = dx - (radius << 1);
+
+    while (x >= y)
+    {
+        SDL_RenderDrawLine( g_renderer, x0 + x, y0 + y, x0 - x, y0 + y);
+        SDL_RenderDrawLine( g_renderer, x0 + y, y0 + x, x0 - y, y0 + x);
+        SDL_RenderDrawLine( g_renderer, x0 - x, y0 - y, x0 + x, y0 - y);
+        SDL_RenderDrawLine( g_renderer, x0 - y, y0 - x, x0 + y, y0 - x);
+
+        if (err <= 0)
+        {
+            y++;
+            err += dy;
+            dy += 2;
+        }
+        if (err > 0)
+        {
+            x--;
+            dx += 2;
+            err += dx - (radius << 1);
+        }
+    }
+}
+
+void gfx_draw_char(int index, int x, int y) {
+    x = x - g_camera.x;
+    y = y - g_camera.y;
+    
+    int sx = (index % SPRITE_SHEET_WIDTH) * 8;
+    int sy = (index / SPRITE_SHEET_WIDTH) * 8;
+    
+    SDL_Rect src_rect = {sx, sy, 8, 8};
+    SDL_Rect dst_rect = {x, y, 8, 8};
+    
+    SDL_RenderCopy( g_renderer, g_spritesheet_texture, &src_rect, &dst_rect);
+}
+
+void gfx_draw_text_at(int x, int y, char *text) {
+    g_cursor.x = x;
+    g_cursor.y = y;
+    
+    char c = 0;
+    int i = 0;
+    while ((c = text[i]) != 0) {
+        gfx_draw_char(FONT_INDEX + c, g_cursor.x, g_cursor.y);
+        g_cursor.x += 8;
+        ++i;
+    }
+}
+
+void gfx_draw_text(char *text) {
+    // todo interpret newlines
+    char c = 0;
+    int i = 0;
+    while ((c = text[i]) != 0) {
+        gfx_draw_char(FONT_INDEX + c, g_cursor.x, g_cursor.y);
+        
+        // hmm, this doesn't really work with camera
+        g_cursor.x += 8;
+        if (g_cursor.x >= SCREEN_WIDTH) {
+            g_cursor.x %= SCREEN_WIDTH;
+            g_cursor.y += 8;
+            if (g_cursor.y >= SCREEN_HEIGHT) {
+                g_camera.y -= 8;
+            }
+        }
+        ++i;
+    }
+}
+
+void gfx_draw_sprite_rot(int index, int x, int y, float r, int flags) {
+    x -= g_camera.x;
+    y -= g_camera.y;
+    
+    int sx = (index % SPRITE_SHEET_WIDTH) * 8;
+    int sy = (index / SPRITE_SHEET_WIDTH) * 8;
+    
+    int size = (flags & SIZE_FLAGS);
+    int shape = (flags & SHAPE_FLAGS) >> 2;
+    Vec2 dim = g_sprite_shapes[shape * 4 + size];
+    
+    int sclx = flags & SCALE_X ? 2 : 1;
+    int scly = flags & SCALE_Y ? 2 : 1;
+    
+    SDL_RendererFlip flip;
+    if (!(flags & FLIP_HORIZONTAL) && !(flags & FLIP_VERTICAL))
+        flip = SDL_FLIP_NONE;
+    else if (flags & FLIP_HORIZONTAL)
+        flip = SDL_FLIP_HORIZONTAL;
+    if (flags & FLIP_VERTICAL)
+        flip |= SDL_FLIP_VERTICAL;
+    
+    SDL_Rect src_rect = {sx, sy, dim.x * 8, dim.y * 8};
+    SDL_Rect dst_rect = {x, y, sclx * dim.x * 8, scly * dim.y * 8};
+    SDL_RenderCopyEx( g_renderer, g_spritesheet_texture, &src_rect, &dst_rect, DEGREES(r), NULL, flip);
+}
+
+void gfx_draw_sprite(int index, int x, int y, int flags) {
+    gfx_draw_sprite_rot(index, x, y, 0, flags);
+}
+
+int gfx_map_data(int x, int y) {
+    return g_map[y * MAP_WIDTH + x] & 0x0F;
+}
+
+int gfx_map_flags(int x, int y) {
+    return (g_map[y * MAP_WIDTH + x] & 0xF0) >> 4;
+}
+
+void gfx_set_map_flags(int x, int y, int value) {
+    int color = gfx_map_data(x, y);
+    g_map[y * MAP_WIDTH + x] = color | (value << 4);
+}
+
+void gfx_draw_map(int x, int y, int mx, int my) {
+    // draws map of fixed size 128x128 (1 screen)
+    int w = 16;
+    int h = 16;
+    
+    for (int i=0; i<w; ++i) {
+        for (int j=0; j<h; ++j) {
+            int sx = mx + i;
+            int sy = my + j;
+            if (sx < 0 || sx >= MAP_WIDTH || sy < 0 || sy >= MAP_HEIGHT) continue;
+            int map_index = gfx_map_data(sx, sy) + TILESET_INDEX;
+            gfx_draw_char(map_index, x + i * 8, y + j * 8);
+        }
+    }
+}
+
+void gfx_draw_map_auto() {
+    // it would be easier for user
+    // to just draw whole map every frame
+    // so this is optimized alternative
+    // (doesn't let user control map shape)
+    int screenx = (g_camera.x / SCREEN_WIDTH) % 4;
+    int screeny = g_camera.y / SCREEN_HEIGHT;
+    
+    // draw the 4 visible screens
+    gfx_draw_map(screenx * 128, screeny * 128, screenx * 16, screeny * 16);
+    gfx_draw_map((screenx+1) * 128, screeny * 128, (screenx+1) * 16, screeny * 16);
+    gfx_draw_map(screenx * 128, (screeny+1) * 128, screenx * 16, (screeny+1) * 16);
+    gfx_draw_map((screenx+1) * 128, (screeny+1) * 128, (screenx+1) * 16, (screeny+1) * 16);
+}
+
+void gfx_load(void (*init)(), void (*update)(), void (*close)()) {
+    user_init = init;
+    user_update = update;
+    user_close = close;
+}
+
+int gfx_init()
+{
+	//Initialize SDL
+	if( SDL_Init( SDL_INIT_VIDEO ) < 0 )
+	{
+		printf( "SDL could not initialize! SDL Error: %s\n", SDL_GetError() );
+		return 0;
+	}
+    
+    SDL_AudioInit("directsound");
+	
+    //Set point sampling
+    if( !SDL_SetHint( SDL_HINT_RENDER_SCALE_QUALITY, "0" ) )
+    {
+        printf( "Warning: Point texture filtering not enabled!" );
+    }
+
+    //Create window
+    g_window = SDL_CreateWindow( "Mini-RTS", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, g_window_width, g_window_height, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE );
+    if( !g_window)
+    {
+        printf( "Window could not be created! SDL Error: %s\n", SDL_GetError() );
+        return 0;
+    }
+    
+    //Create renderer for window
+    g_renderer = SDL_CreateRenderer( g_window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE);
+    if( !g_renderer )
+    {
+        printf( "Renderer could not be created! SDL Error: %s\n", SDL_GetError() );
+        return 0;
+    }
+    
+    // SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED, "1");
+    
+    // SDL_Rect rect = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
+    // SDL_RenderSetViewport(g_renderer, &rect);
+    
+    //Initialize renderer color
+    SDL_SetRenderDrawColor( g_renderer, 0x00, 0x00, 0x00, 0xFF );
+
+    //Initialize PNG loading
+    int imgFlags = IMG_INIT_PNG;
+    if( !( IMG_Init( imgFlags ) & imgFlags ) )
+    {
+        printf( "SDL_image could not initialize! SDL_image Error: %s\n", IMG_GetError() );
+        return 0;
+    }
+    
+    g_render_texture = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+	return 1;
+}
+
+void load_wav(char *path, int index) {
+    // load the wav file 'path' into wavbuffer index 'index'
+    WavBuffer *wav = &g_wavbuffers[index];
+    if (SDL_LoadWAV(path, &wav->spec, &wav->buffer, &wav->length) == NULL) {
+        printf("Could not open %s: %s\n", path, SDL_GetError());
+    }
+
+    wav->spec.callback = my_audio_callback;
+    wav->spec.userdata = NULL;
+    wav->spec.samples = 1024;
+}
+
+void init_audio() {
+    // hack
+    // init audio device with spec of first wav
+    // (saves me having to guess what spec should be)
+    if ( SDL_OpenAudio(&g_wavbuffers[0].spec, NULL) < 0 ){
+        printf("Couldn't open audio: %s\n", SDL_GetError());
+        exit(-1);
+    }
+}
+
+int load_media()
+{
+	//Load PNG texture
+	g_spritesheet_texture_nk = load_texture( SPRITE_SHEET_PATH );
+	if( g_spritesheet_texture_nk == NULL )
+	{
+		printf( "Failed to load texture image!\n" );
+		return 0;
+	}
+
+    // load map
+    gfx_read_map();
+    
+	return 1;
+}
+
+void gfx_close()
+{
+	//Free loaded image
+	SDL_DestroyTexture( g_spritesheet_texture_nk );
+	g_spritesheet_texture_nk = NULL;
+    SDL_DestroyTexture( g_spritesheet_texture_k );
+	g_spritesheet_texture_k = NULL;
+    
+	//Destroy window	
+	SDL_DestroyRenderer( g_renderer );
+	SDL_DestroyWindow( g_window );
+	g_window = NULL;
+	g_renderer = NULL;
+
+	//Quit SDL subsystems
+	IMG_Quit();
+	SDL_Quit();
+}
+
+SDL_Texture* load_texture( char *path )
+{
+	//The final texture
+	SDL_Texture *newTexture = NULL;
+
+	//Load image at specified path
+	SDL_Surface *loadedSurface = IMG_Load( path );
+	if( loadedSurface == NULL )
+	{
+		printf( "Unable to load image %s! SDL_image Error: %s\n", path, IMG_GetError() );
+        return NULL;
+	}
+    
+    
+    // hmm, even indexed image isn't loaded as indexed...
+    // printf("Palette info:\n");
+    // SDL_Palette *palette = loadedSurface->format->palette;
+    // if (!palette) {
+        // printf("No palette\n");
+    // } else {
+        // for (int i=0; i<palette->ncolors; ++i) {
+            // SDL_Color *c = &palette->colors[i];
+            // printf("%i, %i, %i, %i\n", c->r, c->g, c->b, c->a);
+        // }
+    // }
+    
+    //Create texture from surface pixels
+    newTexture = SDL_CreateTextureFromSurface( g_renderer, loadedSurface );
+    if( newTexture == NULL )
+    {
+        printf( "Unable to create texture from %s! SDL Error: %s\n", path, SDL_GetError() );
+    }
+    
+    // NEW do chroma keyed version
+    //Color key image 
+    SDL_SetColorKey( loadedSurface, 1, SDL_MapRGB( loadedSurface->format, 0, 0, 0 ) );
+    g_spritesheet_texture_k = SDL_CreateTextureFromSurface( g_renderer, loadedSurface );
+    // todo error checking and shit...
+
+    //Get rid of old loaded surface
+    SDL_FreeSurface( loadedSurface );
+
+	return newTexture;
+}
+
+int gfx_mainloop() {
+    //Start up SDL and create window
+	if( !gfx_init() ) {
+		printf( "Failed to initialize!\n" );
+        return 0;
+	}
+	
+    //Load media
+    if( !load_media() ) {
+        printf( "Failed to load media!\n" );
+        return 0;
+    }
+    
+    gfx_set_key(0);
+    
+    user_init(); // user init callback
+    
+    //Main loop flag
+    int quit = 0;
+
+    //Event handler
+    SDL_Event e;
+    unsigned int frameTicks = 0;
+
+    //While application is running
+    while( !quit )
+    {
+        ++g_frame;
+        g_time = SDL_GetTicks() / 1000.0f;
+        int ticks = SDL_GetTicks();
+        g_dt = (ticks - frameTicks) / 1000.0f;
+        frameTicks = ticks;
+        
+        //Handle events on queue
+        while( SDL_PollEvent( &e ) != 0 )
+        {
+            //User requests quit
+            if( e.type == SDL_QUIT ) {
+                quit = 1;
+            }
+            if (e.type == SDL_WINDOWEVENT) {
+                switch (e.window.event) {
+                    case SDL_WINDOWEVENT_RESIZED:
+                        g_window_width = e.window.data1;
+                        g_window_height = e.window.data2;
+                    break;
+                }
+            }
+            if (e.type == SDL_KEYUP) {
+                switch(e.key.keysym.scancode) {
+                    case KM_UP:
+                        g_keys[K_UP] = 0;
+                        g_keysup[K_UP] = 1;
+                        break;
+                    case KM_DOWN:
+                        g_keys[K_DOWN] = 0;
+                        g_keysup[K_DOWN] = 1;
+                        break;
+                    case KM_LEFT:
+                        g_keys[K_LEFT] = 0;
+                        g_keysup[K_LEFT] = 1;
+                        break;
+                    case KM_RIGHT:
+                        g_keys[K_RIGHT] = 0;
+                        g_keysup[K_RIGHT] = 1;
+                        break;
+                    case KM_A:
+                        g_keys[K_A] = 0;
+                        g_keysup[K_A] = 1;
+                        break;
+                    case KM_B:
+                        g_keys[K_B] = 0;
+                        g_keysup[K_B] = 1;
+                        break;
+                    case KM_START:
+                        g_keys[K_START] = 0;
+                        g_keysup[K_START] = 1;
+                        break;
+                    case KM_SELECT:
+                        g_keys[K_SELECT] = 0;
+                        g_keysup[K_SELECT] = 1;
+                        break;
+                    default:
+                        break;
+                }
+            }
+            if (e.type == SDL_KEYDOWN) {
+                switch( e.key.keysym.scancode ) { 
+                    case SDL_SCANCODE_F11:
+                        // reset window size
+                        g_window_width = 512;
+                        g_window_height = 512;
+                        SDL_SetWindowSize(g_window, g_window_width, g_window_height);
+                        break;
+                    case SDL_SCANCODE_F10:
+                        // write map
+                        gfx_write_map();
+                        break;
+                    case KM_UP:
+                        g_keys[K_UP] = 1;
+                        g_keysdown[K_UP] = 1;
+                        break;
+                    case KM_DOWN:
+                        g_keys[K_DOWN] = 1;
+                        g_keysdown[K_DOWN] = 1;
+                        break;
+                    case KM_LEFT:
+                        g_keys[K_LEFT] = 1;
+                        g_keysdown[K_LEFT] = 1;
+                        break;
+                    case KM_RIGHT:
+                        g_keys[K_RIGHT] = 1;
+                        g_keysdown[K_RIGHT] = 1;
+                        break;
+                    case KM_A:
+                        g_keys[K_A] = 1;
+                        g_keysdown[K_A] = 1;
+                        break;
+                    case KM_B:
+                        g_keys[K_B] = 1;
+                        g_keysdown[K_B] = 1;
+                        break;
+                    case KM_START:
+                        g_keys[K_START] = 1;
+                        g_keysdown[K_START] = 1;
+                        break;
+                    case KM_SELECT:
+                        g_keys[K_SELECT] = 1;
+                        g_keysdown[K_SELECT] = 1;
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+
+        user_update(); // user update callback
+        
+        SDL_SetRenderTarget(g_renderer, NULL);
+        int dim = MIN(g_window_width, g_window_height);
+        // would multiply dim by aspect ratio if had one
+        int x = 0, y = 0;
+        if (g_window_width < g_window_height) {
+            // vertical letterboxes
+            y = (g_window_height - g_window_width) / 2;
+        }
+        if (g_window_height < g_window_width) {
+            // horizontal letterboxes
+            x = (g_window_width - g_window_height) / 2;
+        }
+        SDL_Rect rect = {x, y, dim, dim};
+        SDL_RenderCopy( g_renderer, g_render_texture, NULL, &rect );
+
+        //Update screen
+        SDL_RenderPresent( g_renderer );
+        
+        // sleep
+        int end = SDL_GetTicks();
+        float delay = TICKS_PER_SECOND - (end - ticks);
+        if (delay > 0)
+            SDL_Delay( delay );
+        
+        // reset keysdown
+        g_keysdown[0] = 0;
+        g_keysdown[1] = 0;
+        g_keysdown[2] = 0;
+        g_keysdown[3] = 0;
+        g_keysdown[4] = 0;
+        g_keysdown[5] = 0;
+        g_keysdown[6] = 0;
+        g_keysdown[7] = 0;
+        
+        // reset keysup
+        g_keysup[0] = 0;
+        g_keysup[1] = 0;
+        g_keysup[2] = 0;
+        g_keysup[3] = 0;
+        g_keysup[4] = 0;
+        g_keysup[5] = 0;
+        g_keysup[6] = 0;
+        g_keysup[7] = 0;
+    }
+
+	//Free resources and close SDL
+    user_close();
+	gfx_close();
+    
+    return 0;
+}

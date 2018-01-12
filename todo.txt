@@ -1,0 +1,56 @@
+
+TODO
+    * demo that demonstrates API
+    * use aspect ratio
+    * fix mapedit
+        * set flags?
+    * hide things to module-level (static?) 
+    * python binding!
+        need build as dll?
+
+ideas
+    * static linked build libs option?
+    * option to build with embedded spritesheet data, audio data   
+    * expose all SDL keyboard input and mouse for dev (for tools)
+    * if drawing something offscreen, don't draw
+    config file
+        * parse a text file (key values pairs, both strings, whitespace separated)
+        * use hashtable to lookup key (or just if-else and strcmp for all options)
+        * ignore comments
+    draw map
+        * width and height arg
+        * (set tileset offset?)
+    config file
+        * screen res
+        * fps
+        * palette
+        * buttons
+    * clip using SDL viewport
+    config file
+        * map size
+        * spritesheet size
+    more modes
+        * 16-bit spritesheet mode
+            (can't use SDL textures if want edit palette...)
+        * text mode
+    sound
+        * chiptune synthesiser
+            what program to edit?
+            what file format to use?
+    artificial limits
+        * count sprites drawn per frame, limit (easy)
+    layers
+        * make multiple render textures
+        * gfx_set_layer(int layer) { SDL_SetRenderTarget(...) }
+    virtual PC
+        * do everything on CPU, don't use SDL textures, etc.
+        * reimplement sprites, tilemap, 2d raster graphics
+        * hblank interrupt
+        * memory map (char *mem[MEMSIZE];)
+            * use macros for different memory segments:
+                MEM_VRAM 0x02000000
+                VIDMEM ((char *)MEM_VRAM)
+        * create virtual CPU, machine code, custom C compiler
+            (or use emulator of existing chip)
+    more tools...
+        
