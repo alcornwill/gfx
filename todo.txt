@@ -1,8 +1,11 @@
 
 TODO
+    module
+        * hide globals behind getters/setters
+        * make globals static
+        * make non-user functions static
     * demo that demonstrates API
     * use aspect ratio
-    * hide things to module-level (static?) 
     * python binding!
         need build as dll?
 
