@@ -31,7 +31,8 @@ SDL_Renderer *g_renderer = NULL;
 SDL_Texture *g_spritesheet_texture = NULL;
 SDL_Texture *g_spritesheet_texture_nk = NULL;
 SDL_Texture *g_spritesheet_texture_k = NULL;
-SDL_Texture *g_render_texture = NULL;
+int g_layer = 0;
+SDL_Texture *g_layers[NUM_LAYERS] = {0};
 unsigned char g_map[MAP_LENGTH] = {0};
 unsigned char g_keys[8] = {0};
 int g_keysdown[8] = {0};
@@ -121,6 +122,11 @@ int gfx_write_map() {
     fwrite(g_map, 1, MAP_LENGTH, file);
     fclose(file);
     return 1;
+}
+
+void gfx_set_layer(int layer) {
+    SDL_SetRenderTarget( g_renderer, g_layers[layer]);
+    g_layer = layer;
 }
 
 void gfx_set_color(int i) {
@@ -382,7 +388,7 @@ int gfx_init()
     }
 
     //Create window
-    g_window = SDL_CreateWindow( "Mini-RTS", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, g_window_width, g_window_height, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE );
+    g_window = SDL_CreateWindow( WINDOW_NAME, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, g_window_width, g_window_height, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE );
     if( !g_window)
     {
         printf( "Window could not be created! SDL Error: %s\n", SDL_GetError() );
@@ -401,9 +407,6 @@ int gfx_init()
     
     // SDL_Rect rect = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
     // SDL_RenderSetViewport(g_renderer, &rect);
-    
-    //Initialize renderer color
-    SDL_SetRenderDrawColor( g_renderer, 0x00, 0x00, 0x00, 0xFF );
 
     //Initialize PNG loading
     int imgFlags = IMG_INIT_PNG;
@@ -413,8 +416,11 @@ int gfx_init()
         return 0;
     }
     
-    g_render_texture = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, SCREEN_WIDTH, SCREEN_HEIGHT);
-
+    // initialize layers (render textures)
+    for (int i=0; i<NUM_LAYERS; ++i) {
+        g_layers[i] = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, SCREEN_WIDTH, SCREEN_HEIGHT);
+    }
+    
 	return 1;
 }
 
@@ -459,14 +465,22 @@ int load_media()
 void gfx_close()
 {
 	//Free loaded image
-	SDL_DestroyTexture( g_spritesheet_texture_nk );
+	SDL_DestroyTexture(g_spritesheet_texture_nk);
 	g_spritesheet_texture_nk = NULL;
-    SDL_DestroyTexture( g_spritesheet_texture_k );
+    SDL_DestroyTexture(g_spritesheet_texture_k);
 	g_spritesheet_texture_k = NULL;
+    g_spritesheet_texture = NULL;
+    
+    // free render textures
+    for (int i=0; i<NUM_LAYERS; ++i) {
+        SDL_Texture *tex = g_layers[i];
+        SDL_DestroyTexture(tex);
+        g_layers[i] = NULL;
+    }
     
 	//Destroy window	
-	SDL_DestroyRenderer( g_renderer );
-	SDL_DestroyWindow( g_window );
+	SDL_DestroyRenderer(g_renderer);
+	SDL_DestroyWindow(g_window);
 	g_window = NULL;
 	g_renderer = NULL;
 
@@ -475,14 +489,14 @@ void gfx_close()
 	SDL_Quit();
 }
 
-SDL_Texture* load_texture( char *path )
+SDL_Texture* load_texture(char *path)
 {
 	//The final texture
 	SDL_Texture *newTexture = NULL;
 
 	//Load image at specified path
-	SDL_Surface *loadedSurface = IMG_Load( path );
-	if( loadedSurface == NULL )
+	SDL_Surface *loadedSurface = IMG_Load(path);
+	if(loadedSurface == NULL)
 	{
 		printf( "Unable to load image %s! SDL_image Error: %s\n", path, IMG_GetError() );
         return NULL;
@@ -533,7 +547,9 @@ int gfx_mainloop() {
         return 0;
     }
     
+    gfx_set_color(0);
     gfx_set_key(0);
+    gfx_set_layer(0);
     
     user_init(); // user init callback
     
@@ -671,16 +687,18 @@ int gfx_mainloop() {
             x = (g_window_width - g_window_height) / 2;
         }
         SDL_Rect rect = {x, y, dim, dim};
-        SDL_RenderCopy( g_renderer, g_render_texture, NULL, &rect );
+        for (int i=0; i<NUM_LAYERS; ++i)
+            SDL_RenderCopy( g_renderer, g_layers[i], NULL, &rect );
 
         //Update screen
-        SDL_RenderPresent( g_renderer );
+        SDL_RenderPresent(g_renderer);
         
-        // sleep
-        int end = SDL_GetTicks();
-        float delay = TICKS_PER_SECOND - (end - ticks);
-        if (delay > 0)
-            SDL_Delay( delay );
+        // clear the window buffer
+        gfx_set_color(0);
+        gfx_clear();
+        
+        // restore render target
+        gfx_set_layer(g_layer);
         
         // reset keysdown
         g_keysdown[0] = 0;
@@ -701,6 +719,12 @@ int gfx_mainloop() {
         g_keysup[5] = 0;
         g_keysup[6] = 0;
         g_keysup[7] = 0;
+        
+        // sleep
+        int end = SDL_GetTicks();
+        float delay = TICKS_PER_SECOND - (end - ticks);
+        if (delay > 0)
+            SDL_Delay( delay );
     }
 
 	//Free resources and close SDL

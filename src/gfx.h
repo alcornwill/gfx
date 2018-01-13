@@ -12,6 +12,7 @@
 #define RADIANS(DEG) (DEG * (M_PI / 180.0))
 
 // CONFIG
+#define WINDOW_NAME "GFX"
 #define FPS 30
 #define TICKS_PER_SECOND ((float)1000 / (float)FPS)
 #define SCREEN_WIDTH 128
@@ -25,11 +26,12 @@
 #define MAP_HEIGHT 64
 #define SPRITES_LENGTH 4096
 #define TILES_LENGTH 4096
-#define MAP_LENGTH 4096  // this would hold more data if using nibbles
+#define MAP_LENGTH 4096  
 #define TILESET_INDEX (SPRITES_LENGTH / 64)
 #define FONT_INDEX ((SPRITES_LENGTH + TILES_LENGTH) / 64)
 #define SPRITE_SHEET_PATH "../assets/spritesheet.bmp"
 #define MAP_PATH "../assets/map"
+#define NUM_LAYERS 1
 
 // KEYMAP
 #define KM_UP SDL_SCANCODE_UP
@@ -125,10 +127,11 @@ int g_window_width;
 int g_window_height;
 SDL_Window *g_window;
 SDL_Renderer *g_renderer;
-SDL_Texture *g_spritesheet_texture;
-SDL_Texture *g_spritesheet_texture_k;
-SDL_Texture *g_spritesheet_texture_nk;
-SDL_Texture *g_render_texture;
+SDL_Texture *g_spritesheet_texture;     // pointer to either k or nk
+SDL_Texture *g_spritesheet_texture_k;   // chroma keyed
+SDL_Texture *g_spritesheet_texture_nk;  // non chroma keyed...
+int g_layer;                        // active layer index
+SDL_Texture *g_layers[NUM_LAYERS];  // holds all layers
 unsigned char g_map[MAP_LENGTH];
 unsigned char g_keys[8];
 int g_keysdown[8];
@@ -175,6 +178,7 @@ int gfx_map_flags(int x, int y);
 void gfx_set_map_flags(int x, int y, int value);
 
 void gfx_clear();
+void gfx_set_layer(int layer);
 void gfx_set_color(int i);
 void gfx_set_key(int i);
 void gfx_draw_rect(int x, int y, int w, int h);

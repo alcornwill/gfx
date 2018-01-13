@@ -2,8 +2,6 @@
 TODO
     * demo that demonstrates API
     * use aspect ratio
-    * fix mapedit
-        * set flags?
     * hide things to module-level (static?) 
     * python binding!
         need build as dll?
@@ -32,6 +30,7 @@ ideas
     more modes
         * 16-bit spritesheet mode
             (can't use SDL textures if want edit palette...)
+        * layer modes
         * text mode
     sound
         * chiptune synthesiser
@@ -39,9 +38,6 @@ ideas
             what file format to use?
     artificial limits
         * count sprites drawn per frame, limit (easy)
-    layers
-        * make multiple render textures
-        * gfx_set_layer(int layer) { SDL_SetRenderTarget(...) }
     virtual PC
         * do everything on CPU, don't use SDL textures, etc.
         * reimplement sprites, tilemap, 2d raster graphics
