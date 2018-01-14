@@ -1,4 +1,5 @@
 
+
 TODO
     module
         * hide globals behind getters/setters
@@ -7,7 +8,7 @@ TODO
     * demo that demonstrates API
     * use aspect ratio
     * python binding!
-        need build as dll?
+        * have to call into python for init, update, close ...
 
 ideas
     * static linked build libs option?

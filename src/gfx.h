@@ -3,18 +3,23 @@
 #include <SDL.h>
 #include <SDL_image.h>
 #include <stdio.h>
-#include "vec.h"
 
 #ifndef GFX_H
 #define GFX_H
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 #define DEGREES(RAD) (RAD * (180.0 / M_PI))
 #define RADIANS(DEG) (DEG * (M_PI / 180.0))
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
+#define CLAMP(A, B, C) (MAX(MIN(A, C), B))
 
 // CONFIG
 #define WINDOW_NAME "GFX"
 #define FPS 30
-#define TICKS_PER_SECOND ((float)1000 / (float)FPS)
+#define TICKS_PER_SECOND (1000 / (float)FPS)
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 128
 #define SPRITE_SHEET_WIDTH 16
@@ -32,6 +37,8 @@
 #define SPRITE_SHEET_PATH "../assets/spritesheet.bmp"
 #define MAP_PATH "../assets/map"
 #define NUM_LAYERS 1
+#define NUM_WAVBUFFER 24 // supports loading up to 24 wav files
+#define AUDIO_SAMPLES 1024 // smaller == less latency
 
 // KEYMAP
 #define KM_UP SDL_SCANCODE_UP
@@ -102,12 +109,10 @@ const int g_keymap[8];
 #define MM_SQUARE
 #define MM_MAP
 
-// hmm, user define?
-#define NUM_WAVBUFFER 6
 
 typedef struct Vec2 Vec2;
 typedef struct Color Color;
-typedef struct Sprite Sprite;
+typedef struct WavBuffer WavBuffer;
 
 struct Vec2 {
     int x;
@@ -119,6 +124,12 @@ struct Color {
     int g;
     int b;
     int a;
+};
+
+struct WavBuffer {
+    SDL_AudioSpec spec;
+    unsigned int length;
+    unsigned char *buffer;    
 };
 
 const Vec2 g_sprite_shapes[12];
@@ -145,30 +156,22 @@ void (*user_init)();
 void (*user_update)();
 void (*user_close)();
 // audio stuff
-typedef struct WavBuffer WavBuffer;
-struct WavBuffer {
-    SDL_AudioSpec spec;
-    unsigned int length;
-    unsigned char *buffer;    
-};
 WavBuffer g_wavbuffers[NUM_WAVBUFFER];
 unsigned char *g_audio_pos;
 unsigned int g_audio_len;
 float g_volume;
 
-void gfx_load(void (*init)(), void (*update)(), void (*close)());
-int gfx_init();
-int load_media();
-void load_wav(char *path, int index);
-void init_audio();
-SDL_Texture *load_texture( char *path );
-void gfx_close();
-int gfx_mainloop();
 
-void play_wav(int index);
+void gfx_load(void (*init)(), void (*update)(), void (*close)());
+void gfx_close();
+void gfx_mainloop();
+
 int gfx_get_key(int i);
 int gfx_get_keydown(int i);
 int gfx_get_keyup(int i);
+
+void gfx_load_wav(char *path, int index);
+void gfx_play_wav(int index);
 
 void gfx_set_map(int x, int y, unsigned int value);
 int gfx_read_map();
@@ -181,6 +184,8 @@ void gfx_clear();
 void gfx_set_layer(int layer);
 void gfx_set_color(int i);
 void gfx_set_key(int i);
+void gfx_get_cam(int *x, int *y);
+void gfx_set_cam(int x, int y);
 void gfx_draw_rect(int x, int y, int w, int h);
 void gfx_draw_rect_fill(int x, int y, int w, int h);
 void gfx_draw_line(int x1, int y1, int x2, int y2);
@@ -190,9 +195,7 @@ void gfx_draw_circ_fill(int x0, int y0, int radius);
 void gfx_draw_text_at(int x, int y, char *text);
 void gfx_draw_text(char *text);
 void gfx_draw_char(int index, int x, int y);
-void gfx_draw_sprite(int index, int x, int y, int flags);
-void gfx_draw_sprite_rot(int index, int x, int y, float r, int flags);
-void gfx_draw_map(int x, int y, int mx, int my);
-void gfx_draw_map_auto();
+void gfx_draw_sprite(int index, int x, int y, float r, int flags);
+void gfx_draw_map();
 
 #endif

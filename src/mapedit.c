@@ -82,7 +82,7 @@ void update() {
     
     // draw tilemap
     gfx_set_color(5); // green
-    gfx_draw_map_auto();
+    gfx_draw_map();
 
     // draw text
     gfx_set_color(7); // yellow

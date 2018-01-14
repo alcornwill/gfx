@@ -25,7 +25,6 @@ const int g_keymap[8] = {
 int g_window_width = 512;
 int g_window_height = 512;
 
-SDL_Texture *load_texture( char *path );
 SDL_Window *g_window = NULL;
 SDL_Renderer *g_renderer = NULL;
 SDL_Texture *g_spritesheet_texture = NULL;
@@ -50,7 +49,7 @@ unsigned char *g_audio_pos = NULL;
 unsigned int g_audio_len = 0;
 float g_volume = 1.0f;
 
-void play_wav(int index) {
+void gfx_play_wav(int index) {
     WavBuffer *wav = &g_wavbuffers[index];
     g_audio_len = wav->length;
     g_audio_pos = wav->buffer;
@@ -92,6 +91,16 @@ int gfx_get_keydown(int i) {
 
 int gfx_get_keyup(int i) {
     return g_keysup[i];
+}
+
+void gfx_get_cam(int *x, int *y) {
+    *x = g_camera.x;
+    *y = g_camera.y;
+}
+
+void gfx_set_cam(int x, int y) {
+    g_camera.x = x;
+    g_camera.y = y;
 }
 
 void gfx_set_map(int x, int y, unsigned int value) {
@@ -147,7 +156,6 @@ void gfx_clear() {
 }
 
 void gfx_draw_rect(int x, int y, int w, int h) {
-    // it is better to use a global rect than allocating memory on stack?
     x -= g_camera.x;
     y -= g_camera.y;
     SDL_Rect rect = { x, y, w, h };		
@@ -289,7 +297,7 @@ void gfx_draw_text(char *text) {
     }
 }
 
-void gfx_draw_sprite_rot(int index, int x, int y, float r, int flags) {
+void gfx_draw_sprite(int index, int x, int y, float r, int flags) {
     x -= g_camera.x;
     y -= g_camera.y;
     
@@ -316,10 +324,6 @@ void gfx_draw_sprite_rot(int index, int x, int y, float r, int flags) {
     SDL_RenderCopyEx( g_renderer, g_spritesheet_texture, &src_rect, &dst_rect, DEGREES(r), NULL, flip);
 }
 
-void gfx_draw_sprite(int index, int x, int y, int flags) {
-    gfx_draw_sprite_rot(index, x, y, 0, flags);
-}
-
 int gfx_map_data(int x, int y) {
     return g_map[y * MAP_WIDTH + x] & 0x0F;
 }
@@ -333,7 +337,7 @@ void gfx_set_map_flags(int x, int y, int value) {
     g_map[y * MAP_WIDTH + x] = color | (value << 4);
 }
 
-void gfx_draw_map(int x, int y, int mx, int my) {
+void draw_map(int x, int y, int mx, int my) {
     // draws map of fixed size 128x128 (1 screen)
     int w = 16;
     int h = 16;
@@ -349,7 +353,7 @@ void gfx_draw_map(int x, int y, int mx, int my) {
     }
 }
 
-void gfx_draw_map_auto() {
+void gfx_draw_map() {
     // it would be easier for user
     // to just draw whole map every frame
     // so this is optimized alternative
@@ -358,10 +362,10 @@ void gfx_draw_map_auto() {
     int screeny = g_camera.y / SCREEN_HEIGHT;
     
     // draw the 4 visible screens
-    gfx_draw_map(screenx * 128, screeny * 128, screenx * 16, screeny * 16);
-    gfx_draw_map((screenx+1) * 128, screeny * 128, (screenx+1) * 16, screeny * 16);
-    gfx_draw_map(screenx * 128, (screeny+1) * 128, screenx * 16, (screeny+1) * 16);
-    gfx_draw_map((screenx+1) * 128, (screeny+1) * 128, (screenx+1) * 16, (screeny+1) * 16);
+    draw_map(screenx * 128, screeny * 128, screenx * 16, screeny * 16);
+    draw_map((screenx+1) * 128, screeny * 128, (screenx+1) * 16, screeny * 16);
+    draw_map(screenx * 128, (screeny+1) * 128, screenx * 16, (screeny+1) * 16);
+    draw_map((screenx+1) * 128, (screeny+1) * 128, (screenx+1) * 16, (screeny+1) * 16);
 }
 
 void gfx_load(void (*init)(), void (*update)(), void (*close)()) {
@@ -370,61 +374,48 @@ void gfx_load(void (*init)(), void (*update)(), void (*close)()) {
     user_close = close;
 }
 
-int gfx_init()
-{
-	//Initialize SDL
-	if( SDL_Init( SDL_INIT_VIDEO ) < 0 )
+void init_sdl() {
+    // initialize SDL
+	if(SDL_Init(SDL_INIT_VIDEO) < 0)
 	{
-		printf( "SDL could not initialize! SDL Error: %s\n", SDL_GetError() );
-		return 0;
+		printf("SDL could not initialize! SDL Error: %s\n", SDL_GetError());
+		exit(1);
 	}
     
     SDL_AudioInit("directsound");
 	
-    //Set point sampling
-    if( !SDL_SetHint( SDL_HINT_RENDER_SCALE_QUALITY, "0" ) )
+    // set point sampling
+    if(!SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0" ))
     {
-        printf( "Warning: Point texture filtering not enabled!" );
+        printf("Warning: Point texture filtering not enabled! SDL Error: %s\n", SDL_GetError());
     }
 
-    //Create window
-    g_window = SDL_CreateWindow( WINDOW_NAME, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, g_window_width, g_window_height, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE );
-    if( !g_window)
+    // create window
+    g_window = SDL_CreateWindow(WINDOW_NAME, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, g_window_width, g_window_height, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+    if(!g_window)
     {
-        printf( "Window could not be created! SDL Error: %s\n", SDL_GetError() );
-        return 0;
+        printf("Window could not be created! SDL Error: %s\n", SDL_GetError());
+        exit(1);
     }
     
-    //Create renderer for window
-    g_renderer = SDL_CreateRenderer( g_window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE);
-    if( !g_renderer )
+    // create renderer for window
+    g_renderer = SDL_CreateRenderer(g_window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE);
+    if(!g_renderer)
     {
-        printf( "Renderer could not be created! SDL Error: %s\n", SDL_GetError() );
-        return 0;
+        printf("Renderer could not be created! SDL Error: %s\n", SDL_GetError());
+        exit(1);
     }
-    
-    // SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED, "1");
-    
-    // SDL_Rect rect = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
-    // SDL_RenderSetViewport(g_renderer, &rect);
 
-    //Initialize PNG loading
+    // initialize PNG loading
     int imgFlags = IMG_INIT_PNG;
-    if( !( IMG_Init( imgFlags ) & imgFlags ) )
+    if(!(IMG_Init(imgFlags) & imgFlags))
     {
-        printf( "SDL_image could not initialize! SDL_image Error: %s\n", IMG_GetError() );
-        return 0;
+        printf("SDL_image could not initialize! SDL_image Error: %s\n", IMG_GetError());
+        exit(1);
     }
-    
-    // initialize layers (render textures)
-    for (int i=0; i<NUM_LAYERS; ++i) {
-        g_layers[i] = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, SCREEN_WIDTH, SCREEN_HEIGHT);
-    }
-    
-	return 1;
 }
 
-void load_wav(char *path, int index) {
+void gfx_load_wav(char *path, int index) {
     // load the wav file 'path' into wavbuffer index 'index'
     WavBuffer *wav = &g_wavbuffers[index];
     if (SDL_LoadWAV(path, &wav->spec, &wav->buffer, &wav->length) == NULL) {
@@ -433,33 +424,14 @@ void load_wav(char *path, int index) {
 
     wav->spec.callback = my_audio_callback;
     wav->spec.userdata = NULL;
-    wav->spec.samples = 1024;
+    wav->spec.samples = AUDIO_SAMPLES;
 }
 
 void init_audio() {
-    // hack
-    // init audio device with spec of first wav
-    // (saves me having to guess what spec should be)
     if ( SDL_OpenAudio(&g_wavbuffers[0].spec, NULL) < 0 ){
         printf("Couldn't open audio: %s\n", SDL_GetError());
         exit(-1);
     }
-}
-
-int load_media()
-{
-	//Load PNG texture
-	g_spritesheet_texture_nk = load_texture( SPRITE_SHEET_PATH );
-	if( g_spritesheet_texture_nk == NULL )
-	{
-		printf( "Failed to load texture image!\n" );
-		return 0;
-	}
-
-    // load map
-    gfx_read_map();
-    
-	return 1;
 }
 
 void gfx_close()
@@ -478,6 +450,12 @@ void gfx_close()
         g_layers[i] = NULL;
     }
     
+    // free wav buffers
+    for (int i=0; i<NUM_WAVBUFFER; ++i) {
+        WavBuffer *wav = &g_wavbuffers[i];
+        SDL_FreeWAV(wav->buffer);
+    }
+    
 	//Destroy window	
 	SDL_DestroyRenderer(g_renderer);
 	SDL_DestroyWindow(g_window);
@@ -489,23 +467,31 @@ void gfx_close()
 	SDL_Quit();
 }
 
-SDL_Texture* load_texture(char *path)
-{
-	//The final texture
-	SDL_Texture *newTexture = NULL;
+void init_layers() {
+    // initialize layers (render textures)
+    for (int i=0; i<NUM_LAYERS; ++i) {
+        g_layers[i] = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, SCREEN_WIDTH, SCREEN_HEIGHT);
+        if (!g_layers[i]) {
+            printf("Failed to initialize layer %d! SDL Error: %s\n", i, SDL_GetError());
+            exit(1);
+        }
+    }
+}
+    
 
-	//Load image at specified path
-	SDL_Surface *loadedSurface = IMG_Load(path);
-	if(loadedSurface == NULL)
+void load_spritesheet()
+{
+	SDL_Surface *surface = IMG_Load(SPRITE_SHEET_PATH);
+	if(!surface)
 	{
-		printf( "Unable to load image %s! SDL_image Error: %s\n", path, IMG_GetError() );
-        return NULL;
+		printf("Unable to load spritesheet! SDL_image Error: %s\n", IMG_GetError());
+        exit(1);
 	}
     
     
     // hmm, even indexed image isn't loaded as indexed...
     // printf("Palette info:\n");
-    // SDL_Palette *palette = loadedSurface->format->palette;
+    // SDL_Palette *palette = surface->format->palette;
     // if (!palette) {
         // printf("No palette\n");
     // } else {
@@ -515,38 +501,51 @@ SDL_Texture* load_texture(char *path)
         // }
     // }
     
-    //Create texture from surface pixels
-    newTexture = SDL_CreateTextureFromSurface( g_renderer, loadedSurface );
-    if( newTexture == NULL )
+    // create texture from surface pixels
+    g_spritesheet_texture_nk = SDL_CreateTextureFromSurface(g_renderer, surface);
+    if(!g_spritesheet_texture_nk)
     {
-        printf( "Unable to create texture from %s! SDL Error: %s\n", path, SDL_GetError() );
+        printf("Unable to create texture from spritesheet surface! SDL Error: %s\n", SDL_GetError());
+        exit(1);
     }
     
-    // NEW do chroma keyed version
-    //Color key image 
-    SDL_SetColorKey( loadedSurface, 1, SDL_MapRGB( loadedSurface->format, 0, 0, 0 ) );
-    g_spritesheet_texture_k = SDL_CreateTextureFromSurface( g_renderer, loadedSurface );
-    // todo error checking and shit...
-
-    //Get rid of old loaded surface
-    SDL_FreeSurface( loadedSurface );
-
-	return newTexture;
+    // do chroma keyed version...
+    // color key image 
+    SDL_SetColorKey(surface, 1, SDL_MapRGB( surface->format, 0, 0, 0 )); // NOTE color key = black
+    g_spritesheet_texture_k = SDL_CreateTextureFromSurface(g_renderer, surface);
+    if(!g_spritesheet_texture_k)
+    {
+        printf("Unable to create texture from spritesheet surface! SDL Error: %s\n", SDL_GetError());
+        exit(1);
+    }
+    
+    // free surface
+    SDL_FreeSurface(surface);
 }
 
-int gfx_mainloop() {
-    //Start up SDL and create window
-	if( !gfx_init() ) {
-		printf( "Failed to initialize!\n" );
-        return 0;
-	}
-	
-    //Load media
-    if( !load_media() ) {
-        printf( "Failed to load media!\n" );
-        return 0;
-    }
+void gfx_mainloop() {
     
+    // init SDL
+    init_sdl();
+    
+    // SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED, "1");
+    
+    // SDL_Rect rect = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
+    // SDL_RenderSetViewport(g_renderer, &rect);
+    
+    // init audio
+    init_audio();
+    
+    // init layers
+    init_layers();
+    
+    // load spritesheet
+    load_spritesheet();
+	
+    // load map
+    gfx_read_map();
+    
+    // init stuff
     gfx_set_color(0);
     gfx_set_key(0);
     gfx_set_layer(0);
@@ -730,6 +729,4 @@ int gfx_mainloop() {
 	//Free resources and close SDL
     user_close();
 	gfx_close();
-    
-    return 0;
 }
