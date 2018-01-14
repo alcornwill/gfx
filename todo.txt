@@ -1,10 +1,6 @@
 
 
 TODO
-    module
-        * hide globals behind getters/setters
-        * make globals static
-        * make non-user functions static
     * demo that demonstrates API
     * use aspect ratio
     * python binding!

@@ -38,6 +38,9 @@
 #define MAP_PATH "../assets/map"
 #define NUM_LAYERS 1
 #define NUM_WAVBUFFER 24 // supports loading up to 24 wav files
+#define AUDIO_SAMPLE_RATE 44100
+#define AUDIO_FORMAT AUDIO_S16
+#define AUDIO_CHANNELS 2
 #define AUDIO_SAMPLES 1024 // smaller == less latency
 
 // KEYMAP
@@ -60,25 +63,40 @@
 #define K_START 6
 #define K_SELECT 7
 
-const int g_keymap[8];
-
 // COLOR
-#define BLACK       {0,   0,   0,   255}
-#define WHITE       {255, 255, 255, 255}
-#define RED         {136, 0,   0,   255}
-#define CYAN        {170, 255, 238, 255}
-#define VIOLET      {204, 68 , 204, 0  }
-#define GREEN       {0,   204, 85,  255}
-#define BLUE        {0,   0,   170, 255}
-#define YELLOW      {238, 238, 119, 255}
-#define ORANGE      {221, 136, 85,  255}
-#define BROWN       {102, 68,  0,   255}
-#define PINK        {255, 119, 119, 255}
-#define DK_GREY   {51,  51,  51,  255}
-#define GREY        {119, 119, 119, 255}
-#define LT_GREEN {170, 255, 102, 255}
-#define LT_BLUE  {0,   136, 255, 255}
-#define LT_GREY  {187, 187, 187, 255}
+#define BLACK    0
+#define WHITE    1
+#define RED      2
+#define CYAN     3
+#define VIOLET   4
+#define GREEN    5
+#define BLUE     6
+#define YELLOW   7
+#define ORANGE   8
+#define BROWN    9
+#define PINK     10
+#define DK_GREY  11
+#define GREY     12
+#define LT_GREEN 13
+#define LT_BLUE  14
+#define LT_GREY  15
+
+#define PAL_BLACK     {0,   0,   0,   255}
+#define PAL_WHITE     {255, 255, 255, 255}
+#define PAL_RED       {136, 0,   0,   255}
+#define PAL_CYAN      {170, 255, 238, 255}
+#define PAL_VIOLET    {204, 68 , 204, 0  }
+#define PAL_GREEN     {0,   204, 85,  255}
+#define PAL_BLUE      {0,   0,   170, 255}
+#define PAL_YELLOW    {238, 238, 119, 255}
+#define PAL_ORANGE    {221, 136, 85,  255}
+#define PAL_BROWN     {102, 68,  0,   255}
+#define PAL_PINK      {255, 119, 119, 255}
+#define PAL_DK_GREY   {51,  51,  51,  255}
+#define PAL_GREY      {119, 119, 119, 255}
+#define PAL_LT_GREEN  {170, 255, 102, 255}
+#define PAL_LT_BLUE   {0,   136, 255, 255}
+#define PAL_LT_GREY   {187, 187, 187, 255}
 
 // SPRITE FLAGS
 #define SIZE_SMALL 0
@@ -110,56 +128,10 @@ const int g_keymap[8];
 #define MM_MAP
 
 
+
 typedef struct Vec2 Vec2;
 typedef struct Color Color;
 typedef struct WavBuffer WavBuffer;
-
-struct Vec2 {
-    int x;
-    int y;
-};
-
-struct Color {
-    int r;
-    int g;
-    int b;
-    int a;
-};
-
-struct WavBuffer {
-    SDL_AudioSpec spec;
-    unsigned int length;
-    unsigned char *buffer;    
-};
-
-const Vec2 g_sprite_shapes[12];
-
-int g_window_width;
-int g_window_height;
-SDL_Window *g_window;
-SDL_Renderer *g_renderer;
-SDL_Texture *g_spritesheet_texture;     // pointer to either k or nk
-SDL_Texture *g_spritesheet_texture_k;   // chroma keyed
-SDL_Texture *g_spritesheet_texture_nk;  // non chroma keyed...
-int g_layer;                        // active layer index
-SDL_Texture *g_layers[NUM_LAYERS];  // holds all layers
-unsigned char g_map[MAP_LENGTH];
-unsigned char g_keys[8];
-int g_keysdown[8];
-int g_keysup[8];
-int g_frame;
-float g_time;
-float g_dt;
-Vec2 g_cursor; // text cursor
-Vec2 g_camera; // offset to all coordinates
-void (*user_init)();
-void (*user_update)();
-void (*user_close)();
-// audio stuff
-WavBuffer g_wavbuffers[NUM_WAVBUFFER];
-unsigned char *g_audio_pos;
-unsigned int g_audio_len;
-float g_volume;
 
 
 void gfx_load(void (*init)(), void (*update)(), void (*close)());

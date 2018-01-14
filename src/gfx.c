@@ -5,13 +5,36 @@
 #include <stdlib.h>
 #include "gfx.h"
 
-const Vec2 g_sprite_shapes[12] = {
+
+struct Vec2 {
+    int x;
+    int y;
+};
+
+struct Color {
+    int r;
+    int g;
+    int b;
+    int a;
+};
+
+struct WavBuffer {
+    SDL_AudioSpec spec;
+    unsigned int length;
+    unsigned char *buffer;    
+};
+
+
+static void my_audio_callback(void *userdata, unsigned char *stream, int len);
+
+
+static const Vec2 g_sprite_shapes[12] = {
     {1, 1}, {2, 2}, {4, 4}, {8, 8},
     {2, 1}, {4, 1}, {4, 2}, {8, 4},
     {1, 2}, {1, 4}, {2, 4}, {4, 8}
 };
 
-const int g_keymap[8] = {
+static const int g_keymap[8] = {
     KM_UP,
     KM_DOWN,
     KM_LEFT,
@@ -22,41 +45,51 @@ const int g_keymap[8] = {
     KM_SELECT
 };
 
-int g_window_width = 512;
-int g_window_height = 512;
+static Color g_palette[16] = {
+    PAL_BLACK,  PAL_WHITE,    PAL_RED,     PAL_CYAN, 
+    PAL_VIOLET, PAL_GREEN,    PAL_BLUE,    PAL_YELLOW, 
+    PAL_ORANGE, PAL_BROWN,    PAL_PINK,    PAL_DK_GREY, 
+    PAL_GREY,   PAL_LT_GREEN, PAL_LT_BLUE, PAL_LT_GREY
+};
 
-SDL_Window *g_window = NULL;
-SDL_Renderer *g_renderer = NULL;
-SDL_Texture *g_spritesheet_texture = NULL;
-SDL_Texture *g_spritesheet_texture_nk = NULL;
-SDL_Texture *g_spritesheet_texture_k = NULL;
-int g_layer = 0;
-SDL_Texture *g_layers[NUM_LAYERS] = {0};
-unsigned char g_map[MAP_LENGTH] = {0};
-unsigned char g_keys[8] = {0};
-int g_keysdown[8] = {0};
-int g_keysup[8] = {0};
-int g_frame = 0;
-float g_time = 0;
-float g_dt = 0;
-Vec2 g_cursor = {0, 0}; // text cursor
-Vec2 g_camera = {0, 0};
-void (*user_init)() = NULL;
-void (*user_update)() = NULL;
+static SDL_AudioSpec g_spec = {
+    .freq =     AUDIO_SAMPLE_RATE,
+    .format =   AUDIO_FORMAT,
+    .channels = AUDIO_CHANNELS,
+    .samples =  AUDIO_SAMPLES,
+    .callback = my_audio_callback,
+    .userdata = NULL
+};
 
-WavBuffer g_wavbuffers[NUM_WAVBUFFER] = {0};
-unsigned char *g_audio_pos = NULL;
-unsigned int g_audio_len = 0;
-float g_volume = 1.0f;
+static int g_window_width = 512;
+static int g_window_height = 512;
 
-void gfx_play_wav(int index) {
-    WavBuffer *wav = &g_wavbuffers[index];
-    g_audio_len = wav->length;
-    g_audio_pos = wav->buffer;
-    SDL_PauseAudio(0);
-}
+static SDL_Window *g_window = NULL;
+static SDL_Renderer *g_renderer = NULL;
+static SDL_Texture *g_spritesheet_texture = NULL; // k or nk
+static SDL_Texture *g_spritesheet_texture_nk = NULL; // non color keyed...
+static SDL_Texture *g_spritesheet_texture_k = NULL; // color keyed
+static int g_layer = 0;
+static SDL_Texture *g_layers[NUM_LAYERS] = {0};
+static unsigned char g_map[MAP_LENGTH] = {0};
+static unsigned char g_keys[8] = {0};
+static int g_keysdown[8] = {0};
+static int g_keysup[8] = {0};
+static int g_frame = 0;
+static float g_time = 0;
+static float g_dt = 0;
+static Vec2 g_cursor = {0, 0}; // text cursor
+static Vec2 g_camera = {0, 0};
+static void (*g_user_init)() = NULL;
+static void (*g_user_update)() = NULL;
+static void (*g_user_close)() = NULL;
+static WavBuffer g_wavbuffers[NUM_WAVBUFFER] = {0};
+static unsigned char *g_audio_pos = NULL;
+static unsigned int g_audio_len = 0;
+static float g_volume = 1.0f;
 
-void my_audio_callback(void *userdata, unsigned char *stream, int len) {
+
+static void my_audio_callback(void *userdata, unsigned char *stream, int len) {
     SDL_memset(stream, 0, len);
 
 	if (g_audio_len ==0)
@@ -74,12 +107,12 @@ void my_audio_callback(void *userdata, unsigned char *stream, int len) {
     // }
 }
 
-Color g_palette[16] = {
-    BLACK, WHITE, RED, CYAN, 
-    VIOLET, GREEN, BLUE, YELLOW, 
-    ORANGE, BROWN, PINK, DK_GREY, 
-    GREY, LT_GREEN, LT_BLUE, LT_GREY
-};
+void gfx_play_wav(int index) {
+    WavBuffer *wav = &g_wavbuffers[index];
+    g_audio_len = wav->length;
+    g_audio_pos = wav->buffer;
+    SDL_PauseAudio(0);
+}
 
 int gfx_get_key(int i) {
     return g_keys[g_keymap[i]];
@@ -337,7 +370,7 @@ void gfx_set_map_flags(int x, int y, int value) {
     g_map[y * MAP_WIDTH + x] = color | (value << 4);
 }
 
-void draw_map(int x, int y, int mx, int my) {
+static void draw_map(int x, int y, int mx, int my) {
     // draws map of fixed size 128x128 (1 screen)
     int w = 16;
     int h = 16;
@@ -369,12 +402,12 @@ void gfx_draw_map() {
 }
 
 void gfx_load(void (*init)(), void (*update)(), void (*close)()) {
-    user_init = init;
-    user_update = update;
-    user_close = close;
+    g_user_init = init;
+    g_user_update = update;
+    g_user_close = close;
 }
 
-void init_sdl() {
+static void init_sdl() {
     // initialize SDL
 	if(SDL_Init(SDL_INIT_VIDEO) < 0)
 	{
@@ -422,16 +455,19 @@ void gfx_load_wav(char *path, int index) {
         printf("Could not open %s: %s\n", path, SDL_GetError());
     }
 
+    // (can't we use g_spec?)
     wav->spec.callback = my_audio_callback;
     wav->spec.userdata = NULL;
     wav->spec.samples = AUDIO_SAMPLES;
 }
 
-void init_audio() {
-    if ( SDL_OpenAudio(&g_wavbuffers[0].spec, NULL) < 0 ){
+static void init_audio() {
+    if (SDL_OpenAudio(&g_spec, NULL) < 0){
         printf("Couldn't open audio: %s\n", SDL_GetError());
         exit(-1);
     }
+    
+    // todo validate spec
 }
 
 void gfx_close()
@@ -467,7 +503,7 @@ void gfx_close()
 	SDL_Quit();
 }
 
-void init_layers() {
+static void init_layers() {
     // initialize layers (render textures)
     for (int i=0; i<NUM_LAYERS; ++i) {
         g_layers[i] = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -479,7 +515,7 @@ void init_layers() {
 }
     
 
-void load_spritesheet()
+static void load_spritesheet()
 {
 	SDL_Surface *surface = IMG_Load(SPRITE_SHEET_PATH);
 	if(!surface)
@@ -550,7 +586,7 @@ void gfx_mainloop() {
     gfx_set_key(0);
     gfx_set_layer(0);
     
-    user_init(); // user init callback
+    g_user_init(); // user init callback
     
     //Main loop flag
     int quit = 0;
@@ -671,7 +707,7 @@ void gfx_mainloop() {
             }
         }
 
-        user_update(); // user update callback
+        g_user_update(); // user update callback
         
         SDL_SetRenderTarget(g_renderer, NULL);
         int dim = MIN(g_window_width, g_window_height);
@@ -727,6 +763,6 @@ void gfx_mainloop() {
     }
 
 	//Free resources and close SDL
-    user_close();
+    g_user_close();
 	gfx_close();
 }
