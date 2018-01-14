@@ -135,7 +135,6 @@ typedef struct WavBuffer WavBuffer;
 
 
 void gfx_load(void (*init)(), void (*update)(), void (*close)());
-void gfx_close();
 void gfx_mainloop();
 
 int gfx_get_key(int i);
@@ -145,11 +144,11 @@ int gfx_get_keyup(int i);
 void gfx_load_wav(char *path, int index);
 void gfx_play_wav(int index);
 
-void gfx_set_map(int x, int y, unsigned int value);
 int gfx_read_map();
 int gfx_write_map();
 int gfx_map_data(int x, int y);
 int gfx_map_flags(int x, int y);
+void gfx_set_map(int x, int y, unsigned int value);
 void gfx_set_map_flags(int x, int y, int value);
 
 void gfx_clear();

@@ -470,7 +470,7 @@ static void init_audio() {
     // todo validate spec
 }
 
-void gfx_close()
+static void gfx_close()
 {
 	//Free loaded image
 	SDL_DestroyTexture(g_spritesheet_texture_nk);
