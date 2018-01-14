@@ -72,7 +72,7 @@ static SDL_Texture *g_spritesheet_texture_k = NULL; // color keyed
 static int g_layer = 0;
 static SDL_Texture *g_layers[NUM_LAYERS] = {0};
 static unsigned char g_map[MAP_LENGTH] = {0};
-static unsigned char g_keys[8] = {0};
+static int g_keys[8] = {0};
 static int g_keysdown[8] = {0};
 static int g_keysup[8] = {0};
 static int g_frame = 0;
@@ -115,7 +115,7 @@ void gfx_play_wav(int index) {
 }
 
 int gfx_get_key(int i) {
-    return g_keys[g_keymap[i]];
+    return g_keys[i];
 }
 
 int gfx_get_keydown(int i) {
@@ -142,9 +142,9 @@ void gfx_set_map(int x, int y, unsigned int value) {
         g_map[i] = value & 0xF;
 }
 
-int gfx_read_map() {
+int gfx_read_map(char *path) {
     FILE *file = NULL;
-    file = fopen(MAP_PATH, "r");
+    file = fopen(path, "r");
     if (!file) {
         printf("Failed to read tilemap!\n");
         return 0;
@@ -154,9 +154,9 @@ int gfx_read_map() {
     return 1;
 }
 
-int gfx_write_map() {
+int gfx_write_map(char *path) {
     FILE *file = NULL;
-    file = fopen(MAP_PATH, "w");
+    file = fopen(path, "w");
     if (!file) {
         printf(" Failed to write tilemap!\n");
         return 0;
@@ -284,7 +284,7 @@ void gfx_draw_circ_fill(int x0, int y0, int radius)
     }
 }
 
-void gfx_draw_char(int index, int x, int y) {
+static void draw_char(int index, int x, int y) {
     x = x - g_camera.x;
     y = y - g_camera.y;
     
@@ -294,7 +294,9 @@ void gfx_draw_char(int index, int x, int y) {
     SDL_Rect src_rect = {sx, sy, 8, 8};
     SDL_Rect dst_rect = {x, y, 8, 8};
     
-    SDL_RenderCopy( g_renderer, g_spritesheet_texture, &src_rect, &dst_rect);
+    if (SDL_RenderCopy( g_renderer, g_spritesheet_texture, &src_rect, &dst_rect) != 0) {
+        printf("Could not draw char! SDL Error: %s\n", SDL_GetError());
+    }
 }
 
 void gfx_draw_text_at(int x, int y, char *text) {
@@ -304,7 +306,7 @@ void gfx_draw_text_at(int x, int y, char *text) {
     char c = 0;
     int i = 0;
     while ((c = text[i]) != 0) {
-        gfx_draw_char(FONT_INDEX + c, g_cursor.x, g_cursor.y);
+        draw_char(FONT_INDEX + c, g_cursor.x, g_cursor.y);
         g_cursor.x += 8;
         ++i;
     }
@@ -315,7 +317,7 @@ void gfx_draw_text(char *text) {
     char c = 0;
     int i = 0;
     while ((c = text[i]) != 0) {
-        gfx_draw_char(FONT_INDEX + c, g_cursor.x, g_cursor.y);
+        draw_char(FONT_INDEX + c, g_cursor.x, g_cursor.y);
         
         // hmm, this doesn't really work with camera
         g_cursor.x += 8;
@@ -354,7 +356,9 @@ void gfx_draw_sprite(int index, int x, int y, float r, int flags) {
     
     SDL_Rect src_rect = {sx, sy, dim.x * 8, dim.y * 8};
     SDL_Rect dst_rect = {x, y, sclx * dim.x * 8, scly * dim.y * 8};
-    SDL_RenderCopyEx( g_renderer, g_spritesheet_texture, &src_rect, &dst_rect, DEGREES(r), NULL, flip);
+    if (SDL_RenderCopyEx( g_renderer, g_spritesheet_texture, &src_rect, &dst_rect, DEGREES(r), NULL, flip) != 0) {
+        printf("Could not draw sprite! SDL Error: %s\n", SDL_GetError());
+    }
 }
 
 int gfx_map_data(int x, int y) {
@@ -381,16 +385,13 @@ static void draw_map(int x, int y, int mx, int my) {
             int sy = my + j;
             if (sx < 0 || sx >= MAP_WIDTH || sy < 0 || sy >= MAP_HEIGHT) continue;
             int map_index = gfx_map_data(sx, sy) + TILESET_INDEX;
-            gfx_draw_char(map_index, x + i * 8, y + j * 8);
+            draw_char(map_index, x + i * 8, y + j * 8);
         }
     }
 }
 
 void gfx_draw_map() {
-    // it would be easier for user
-    // to just draw whole map every frame
-    // so this is optimized alternative
-    // (doesn't let user control map shape)
+    // draws whole map (nice if had more control...)
     int screenx = (g_camera.x / SCREEN_WIDTH) % 4;
     int screeny = g_camera.y / SCREEN_HEIGHT;
     
@@ -439,13 +440,15 @@ static void init_sdl() {
         exit(1);
     }
 
-    // initialize PNG loading
-    int imgFlags = IMG_INIT_PNG;
-    if(!(IMG_Init(imgFlags) & imgFlags))
-    {
-        printf("SDL_image could not initialize! SDL_image Error: %s\n", IMG_GetError());
-        exit(1);
-    }
+    // init SDL_Image
+    IMG_Init(0);
+    // // initialize PNG loading
+    // int imgFlags = IMG_INIT_PNG;
+    // if(!(IMG_Init(imgFlags) & imgFlags))
+    // {
+        // printf("SDL_image could not initialize! SDL_image Error: %s\n", IMG_GetError());
+        // exit(1);
+    // }
 }
 
 void gfx_load_wav(char *path, int index) {
@@ -515,9 +518,11 @@ static void init_layers() {
 }
     
 
-static void load_spritesheet()
+void gfx_load_spritesheet(char *path)
 {
-	SDL_Surface *surface = IMG_Load(SPRITE_SHEET_PATH);
+    // NOTE don't call twice, doesn't free existing... (todo)
+    
+	SDL_Surface *surface = IMG_Load(path);
 	if(!surface)
 	{
 		printf("Unable to load spritesheet! SDL_image Error: %s\n", IMG_GetError());
@@ -557,6 +562,11 @@ static void load_spritesheet()
     
     // free surface
     SDL_FreeSurface(surface);
+    
+    
+    // init stuff
+    gfx_set_color(0);
+    gfx_set_key(0);
 }
 
 void gfx_mainloop() {
@@ -575,15 +585,7 @@ void gfx_mainloop() {
     // init layers
     init_layers();
     
-    // load spritesheet
-    load_spritesheet();
-	
-    // load map
-    gfx_read_map();
-    
     // init stuff
-    gfx_set_color(0);
-    gfx_set_key(0);
     gfx_set_layer(0);
     
     g_user_init(); // user init callback
@@ -667,7 +669,7 @@ void gfx_mainloop() {
                         break;
                     case SDL_SCANCODE_F10:
                         // write map
-                        gfx_write_map();
+                        //gfx_write_map();
                         break;
                     case KM_UP:
                         g_keys[K_UP] = 1;

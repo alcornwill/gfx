@@ -1,10 +1,14 @@
 
 
 TODO
-    * demo that demonstrates API
-    * use aspect ratio
     * python binding!
-        * have to call into python for init, update, close ...
+        * validate user loaded spritesheet & map before use
+        * hmm, we need all the defines...
+        * how do error handling?!
+    * remove init callback
+        * do init in gfx_load
+        * user can run whatever they want afterwards
+    * use aspect ratio
 
 ideas
     * static linked build libs option?

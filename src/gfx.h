@@ -34,11 +34,9 @@
 #define MAP_LENGTH 4096  
 #define TILESET_INDEX (SPRITES_LENGTH / 64)
 #define FONT_INDEX ((SPRITES_LENGTH + TILES_LENGTH) / 64)
-#define SPRITE_SHEET_PATH "../assets/spritesheet.bmp"
-#define MAP_PATH "../assets/map"
 #define NUM_LAYERS 1
 #define NUM_WAVBUFFER 24 // supports loading up to 24 wav files
-#define AUDIO_SAMPLE_RATE 44100
+#define AUDIO_SAMPLE_RATE 24000
 #define AUDIO_FORMAT AUDIO_S16
 #define AUDIO_CHANNELS 2
 #define AUDIO_SAMPLES 1024 // smaller == less latency
@@ -143,9 +141,9 @@ int gfx_get_keyup(int i);
 
 void gfx_load_wav(char *path, int index);
 void gfx_play_wav(int index);
-
-int gfx_read_map();
-int gfx_write_map();
+void gfx_load_spritesheet(char *path);
+int gfx_read_map(char *path);
+int gfx_write_map(char *path);
 int gfx_map_data(int x, int y);
 int gfx_map_flags(int x, int y);
 void gfx_set_map(int x, int y, unsigned int value);
@@ -165,7 +163,6 @@ void gfx_draw_circ(int x0, int y0, int radius);
 void gfx_draw_circ_fill(int x0, int y0, int radius);
 void gfx_draw_text_at(int x, int y, char *text);
 void gfx_draw_text(char *text);
-void gfx_draw_char(int index, int x, int y);
 void gfx_draw_sprite(int index, int x, int y, float r, int flags);
 void gfx_draw_map();
 
