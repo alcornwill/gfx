@@ -541,6 +541,13 @@ int gfx_load_spritesheet(char *path)
     return 1;
 }
 
+static void do_screenshot() {
+    SDL_Surface *sshot = SDL_CreateRGBSurface(0, SCREEN_WIDTH, SCREEN_HEIGHT, 32, 0x00ff0000, 0x0000ff00, 0x000000ff, 0xff000000);
+    SDL_RenderReadPixels(g_renderer, NULL, SDL_PIXELFORMAT_ARGB8888, sshot->pixels, sshot->pitch);
+    SDL_SaveBMP(sshot, "screenshot.bmp");
+    SDL_FreeSurface(sshot);   
+}
+
 static void gfx_close()
 {
 	//Free loaded image
@@ -686,6 +693,10 @@ int gfx_mainloop() {
                     case SDL_SCANCODE_F10:
                         // write map
                         //gfx_write_map();
+                        break;
+                    case SDL_SCANCODE_F9:
+                        // take screenshot
+                        do_screenshot();
                         break;
                     case KM_UP:
                         g_keys[K_UP] = 1;
