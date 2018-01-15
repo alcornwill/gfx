@@ -1,10 +1,9 @@
 
 
 TODO
-    * gfx_quit
-    * validate user loaded spritesheet & map before use
     * remove init callback
         do init in gfx_load
+    * validate user loaded spritesheet & map before use
     * use aspect ratio
 
 ideas

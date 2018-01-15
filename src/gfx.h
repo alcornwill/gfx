@@ -134,7 +134,7 @@ typedef struct WavBuffer WavBuffer;
 
 int gfx_load(int (*init)(), int (*update)(), int (*close)());
 int gfx_mainloop();
-// int gfx_quit();
+void gfx_quit();
 
 int gfx_get_key(int i);
 int gfx_get_keydown(int i);

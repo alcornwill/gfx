@@ -61,9 +61,9 @@ static SDL_AudioSpec g_spec = {
     .userdata = NULL
 };
 
+static int g_quit = 0;
 static int g_window_width = 512;
 static int g_window_height = 512;
-
 static SDL_Window *g_window = NULL;
 static SDL_Renderer *g_renderer = NULL;
 static SDL_Texture *g_spritesheet_texture = NULL; // k or nk
@@ -570,6 +570,10 @@ void gfx_load_spritesheet(char *path)
     gfx_set_key(0);
 }
 
+void gfx_quit() {
+    g_quit = 1;
+}
+
 int gfx_mainloop() {
     int success = 1;
     
@@ -590,12 +594,9 @@ int gfx_mainloop() {
     // init stuff
     gfx_set_layer(0);
     
-    //Main loop flag
-    int quit = 0;
-    
     // user init callback
     if (!g_user_init()) {
-        quit = 1;
+        g_quit = 1;
         success = 0;
     }
 
@@ -604,7 +605,7 @@ int gfx_mainloop() {
     unsigned int frameTicks = 0;
 
     //While application is running
-    while( !quit )
+    while( !g_quit )
     {
         ++g_frame;
         g_time = SDL_GetTicks() / 1000.0f;
@@ -615,9 +616,9 @@ int gfx_mainloop() {
         //Handle events on queue
         while( SDL_PollEvent( &e ) != 0 )
         {
-            //User requests quit
+            // user requests quit
             if( e.type == SDL_QUIT ) {
-                quit = 1;
+                g_quit = 1;
             }
             if (e.type == SDL_WINDOWEVENT) {
                 switch (e.window.event) {
@@ -717,7 +718,7 @@ int gfx_mainloop() {
 
         // user update callback
         if (!g_user_update()) {
-            quit = 1;
+            g_quit = 1;
             success = 0;
         }
         

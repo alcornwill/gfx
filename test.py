@@ -20,6 +20,7 @@ def update():
     if key(K_LEFT): pos[0] -= 1
     if key(K_RIGHT): pos[0] += 1
     if keydown(K_A): play_wav(0)
+    if keydown(K_B): quit()
     
     cx, cy = get_cam()
     if pos[0]-cx<16: cx -= 1

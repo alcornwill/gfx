@@ -80,6 +80,16 @@ static PyObject *py_gfx_mainloop(PyObject *self, PyObject *args)
     Py_RETURN_NONE;
 }
 
+static PyObject *py_gfx_quit(PyObject *self, PyObject *args)
+{
+    if (!PyArg_ParseTuple(args, ""))
+        return NULL;
+    
+    gfx_quit();
+    
+    Py_RETURN_NONE;
+}
+
 static PyObject *py_gfx_get_key(PyObject *self, PyObject *args)
 {
     int i = 0;
@@ -433,6 +443,7 @@ static PyObject *py_gfx_draw_map(PyObject *self, PyObject *args)
 static PyMethodDef gfx_methods[] = {
     {"init",          py_gfx_load,          METH_VARARGS, ""},
     {"mainloop",      py_gfx_mainloop,      METH_VARARGS, ""},
+    {"quit",          py_gfx_quit,          METH_VARARGS, ""},
     {"key",           py_gfx_get_key,       METH_VARARGS, ""},
     {"keydown",       py_gfx_get_keydown,   METH_VARARGS, ""},
     {"keyup",         py_gfx_get_keyup,     METH_VARARGS, ""},
@@ -449,7 +460,6 @@ static PyMethodDef gfx_methods[] = {
     {"set_layer",     py_gfx_set_layer,     METH_VARARGS, ""},
     {"color",         py_gfx_set_color,     METH_VARARGS, ""},
     {"ckey",          py_gfx_set_key,       METH_VARARGS, ""},
-    // use python property?
     {"set_cam",       py_gfx_set_cam,       METH_VARARGS, ""},
     {"get_cam",       py_gfx_get_cam,       METH_VARARGS, ""},
     {"rect",          py_gfx_draw_rect,     METH_VARARGS, ""},
