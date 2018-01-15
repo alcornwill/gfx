@@ -6,6 +6,11 @@
 #include "gfx.h"
 
 
+typedef struct Vec2 Vec2;
+typedef struct Color Color;
+typedef struct WavBuffer WavBuffer;
+
+
 struct Vec2 {
     int x;
     int y;

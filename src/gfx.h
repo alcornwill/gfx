@@ -126,12 +126,6 @@
 #define MM_MAP
 
 
-
-typedef struct Vec2 Vec2;
-typedef struct Color Color;
-typedef struct WavBuffer WavBuffer;
-
-
 int gfx_load(int (*update)(), int (*close)());
 int gfx_mainloop();
 void gfx_quit();
