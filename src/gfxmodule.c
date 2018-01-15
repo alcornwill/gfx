@@ -6,22 +6,37 @@ static PyObject *py_init   = NULL;
 static PyObject *py_update = NULL;
 static PyObject *py_close  = NULL;
 
-static void my_init() {
-    PyObject_CallObject(py_init, NULL);
+static int my_init() {
+    PyObject *res = NULL;
+    res = PyObject_CallObject(py_init, NULL);
+    if (!res)
+        return 0;
+    Py_DECREF(res);
+    return 1;
 }
 
-static void my_update() {
-    PyErr_Print(); // hmm, how do error handling?
-    PyObject_CallObject(py_update, NULL);
+static int my_update() {
+    PyObject *res = NULL;
+    res = PyObject_CallObject(py_update, NULL);
+    if (!res)
+        return 0;
+    Py_DECREF(res);
+    return 1;
 }
 
-static void my_close() {
-    PyObject_CallObject(py_close, NULL);
+static int my_close() {
+    PyObject *res = NULL;
+    res = PyObject_CallObject(py_close, NULL);
+    if (!res)
+        return 0;
+    Py_DECREF(res);
     
     // also do this
     Py_XDECREF(py_init);
     Py_XDECREF(py_update);
     Py_XDECREF(py_close);
+    
+    return 1;
 }
 
 
@@ -59,8 +74,8 @@ static PyObject *py_gfx_mainloop(PyObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, ""))
         return NULL;
     
-    
-    gfx_mainloop();
+    if (!gfx_mainloop())
+        return NULL;
     
     Py_RETURN_NONE;
 }
@@ -451,6 +466,48 @@ static PyMethodDef gfx_methods[] = {
 
 PyMODINIT_FUNC initgfx(void)
 {
-    //Py_Initialize();
-    Py_InitModule("gfx", gfx_methods);
+    PyObject *m;
+    m = Py_InitModule("gfx", gfx_methods);
+    
+    // define constants
+#define ADD_CONST(x) \
+    if (PyModule_AddIntConstant(m, #x, x)) Py_DECREF(m)
+    
+    ADD_CONST(K_UP);
+    ADD_CONST(K_DOWN);
+    ADD_CONST(K_LEFT);
+    ADD_CONST(K_RIGHT);
+    ADD_CONST(K_A);
+    ADD_CONST(K_B);
+    ADD_CONST(K_START);
+    ADD_CONST(K_SELECT);
+
+    ADD_CONST(BLACK);
+    ADD_CONST(WHITE);
+    ADD_CONST(RED);
+    ADD_CONST(CYAN);
+    ADD_CONST(VIOLET);
+    ADD_CONST(GREEN);
+    ADD_CONST(BLUE);
+    ADD_CONST(YELLOW);
+    ADD_CONST(ORANGE);
+    ADD_CONST(BROWN);
+    ADD_CONST(PINK);
+    ADD_CONST(DK_GREY);
+    ADD_CONST(GREY);
+    ADD_CONST(LT_GREEN);
+    ADD_CONST(LT_BLUE);
+    ADD_CONST(LT_GREY);
+    
+    ADD_CONST(SIZE_SMALL);
+    ADD_CONST(SIZE_MEDIUM);
+    ADD_CONST(SIZE_BIG);
+    ADD_CONST(SIZE_HUGE);
+    ADD_CONST(SHAPE_SQUARE);
+    ADD_CONST(SHAPE_WIDE);
+    ADD_CONST(SHAPE_TALL);
+    ADD_CONST(SCALE_X);
+    ADD_CONST(SCALE_Y);
+    ADD_CONST(FLIP_HORIZONTAL);
+    ADD_CONST(FLIP_VERTICAL);
 }

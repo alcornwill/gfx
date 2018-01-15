@@ -1,13 +1,10 @@
 
 
 TODO
-    * python binding!
-        * validate user loaded spritesheet & map before use
-        * hmm, we need all the defines...
-        * how do error handling?!
+    * gfx_quit
+    * validate user loaded spritesheet & map before use
     * remove init callback
-        * do init in gfx_load
-        * user can run whatever they want afterwards
+        do init in gfx_load
     * use aspect ratio
 
 ideas

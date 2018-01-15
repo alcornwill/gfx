@@ -80,9 +80,9 @@ static float g_time = 0;
 static float g_dt = 0;
 static Vec2 g_cursor = {0, 0}; // text cursor
 static Vec2 g_camera = {0, 0};
-static void (*g_user_init)() = NULL;
-static void (*g_user_update)() = NULL;
-static void (*g_user_close)() = NULL;
+static int (*g_user_init)() = NULL;
+static int (*g_user_update)() = NULL;
+static int (*g_user_close)() = NULL;
 static WavBuffer g_wavbuffers[NUM_WAVBUFFER] = {0};
 static unsigned char *g_audio_pos = NULL;
 static unsigned int g_audio_len = 0;
@@ -402,10 +402,11 @@ void gfx_draw_map() {
     draw_map((screenx+1) * 128, (screeny+1) * 128, (screenx+1) * 16, (screeny+1) * 16);
 }
 
-void gfx_load(void (*init)(), void (*update)(), void (*close)()) {
+int gfx_load(int (*init)(), int (*update)(), int (*close)()) {
     g_user_init = init;
     g_user_update = update;
     g_user_close = close;
+    return 1;
 }
 
 static void init_sdl() {
@@ -569,7 +570,8 @@ void gfx_load_spritesheet(char *path)
     gfx_set_key(0);
 }
 
-void gfx_mainloop() {
+int gfx_mainloop() {
+    int success = 1;
     
     // init SDL
     init_sdl();
@@ -588,10 +590,14 @@ void gfx_mainloop() {
     // init stuff
     gfx_set_layer(0);
     
-    g_user_init(); // user init callback
-    
     //Main loop flag
     int quit = 0;
+    
+    // user init callback
+    if (!g_user_init()) {
+        quit = 1;
+        success = 0;
+    }
 
     //Event handler
     SDL_Event e;
@@ -709,7 +715,11 @@ void gfx_mainloop() {
             }
         }
 
-        g_user_update(); // user update callback
+        // user update callback
+        if (!g_user_update()) {
+            quit = 1;
+            success = 0;
+        }
         
         SDL_SetRenderTarget(g_renderer, NULL);
         int dim = MIN(g_window_width, g_window_height);
@@ -765,6 +775,9 @@ void gfx_mainloop() {
     }
 
 	//Free resources and close SDL
-    g_user_close();
+    if (!g_user_close()) 
+        success = 0;
 	gfx_close();
+    
+    return success;
 }

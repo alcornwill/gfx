@@ -132,8 +132,9 @@ typedef struct Color Color;
 typedef struct WavBuffer WavBuffer;
 
 
-void gfx_load(void (*init)(), void (*update)(), void (*close)());
-void gfx_mainloop();
+int gfx_load(int (*init)(), int (*update)(), int (*close)());
+int gfx_mainloop();
+// int gfx_quit();
 
 int gfx_get_key(int i);
 int gfx_get_keydown(int i);
