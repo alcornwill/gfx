@@ -6,12 +6,7 @@ from gfx import *
 pos = [64, 64]
 f = 0
 
-def myinit():
-    load_spritesheet("assets/spritesheet.bmp")
-    read_map("assets/map")
-    load_wav("assets/sound.wav", 0)
-    
-def update():
+def __update__():
     global f
     f += 1
     
@@ -56,11 +51,11 @@ def update():
     color(RED)
     sprite(1, 96, 64, sin(f*0.05), SIZE_MEDIUM)
     
-def close():
-    pass
-    
 
 if __name__ == "__main__":
-    init(myinit, update, close)
+    init()
+    load_spritesheet("assets/spritesheet.bmp")
+    read_map("assets/map")
+    load_wav("assets/sound.wav", 0)
     mainloop()
     

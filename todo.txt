@@ -1,12 +1,6 @@
 
-
-TODO
-    * remove init callback
-        do init in gfx_load
-    * validate user loaded spritesheet & map before use
-    * use aspect ratio
-
 ideas
+    * test different screen sizes (use aspect ratio)
     * static linked build libs option?
     * option to build with embedded spritesheet data, audio data   
     * expose all SDL keyboard input and mouse for dev (for tools)

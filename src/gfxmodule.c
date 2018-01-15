@@ -2,18 +2,7 @@
 #include <Python.h>
 #include "gfx.h"
 
-static PyObject *py_init   = NULL;
 static PyObject *py_update = NULL;
-static PyObject *py_close  = NULL;
-
-static int my_init() {
-    PyObject *res = NULL;
-    res = PyObject_CallObject(py_init, NULL);
-    if (!res)
-        return 0;
-    Py_DECREF(res);
-    return 1;
-}
 
 static int my_update() {
     PyObject *res = NULL;
@@ -25,16 +14,8 @@ static int my_update() {
 }
 
 static int my_close() {
-    PyObject *res = NULL;
-    res = PyObject_CallObject(py_close, NULL);
-    if (!res)
-        return 0;
-    Py_DECREF(res);
     
-    // also do this
-    Py_XDECREF(py_init);
     Py_XDECREF(py_update);
-    Py_XDECREF(py_close);
     
     return 1;
 }
@@ -42,29 +23,25 @@ static int my_close() {
 
 static PyObject *py_gfx_load(PyObject *self, PyObject *args)
 {
-    // todo get functions from globals?
-    if (!PyArg_ParseTuple(args, "OOO", &py_init, &py_update, &py_close)) 
+    PyObject *mn = PyImport_AddModule("__main__");
+    if (!mn) {
+        PyErr_SetString(PyExc_TypeError, "__main__ module not found!");
         return NULL;
-    
-    if (!PyCallable_Check(py_init)) {
-        PyErr_SetString(PyExc_TypeError, "parameter must be callable");
+    }
+    py_update = PyObject_GetAttrString(mn, "__update__");
+    if (!py_update) {
+        PyErr_SetString(PyExc_TypeError, "__update__ method not found!");
         return NULL;
     }
     if (!PyCallable_Check(py_update)) {
         PyErr_SetString(PyExc_TypeError, "parameter must be callable");
         return NULL;
     }
-    if (!PyCallable_Check(py_close)) {
-        PyErr_SetString(PyExc_TypeError, "parameter must be callable");
+    
+    if (!gfx_load(my_update, my_close)) {
+        PyErr_SetString(PyExc_TypeError, "Failed to initialize");
         return NULL;
     }
-        
-    Py_XINCREF(py_init); 
-    Py_XINCREF(py_update);
-    Py_XINCREF(py_close); 
-    
-    
-    gfx_load(my_init, my_update, my_close);
     
     Py_RETURN_NONE;
 }
@@ -158,7 +135,10 @@ static PyObject *py_gfx_load_spritesheet(PyObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "s", &path))
         return NULL;
     
-    gfx_load_spritesheet(path);
+    if (!gfx_load_spritesheet(path)) {
+        PyErr_SetString(PyExc_TypeError, "Cannot load spritesheet");
+        return NULL;
+    }
     
     Py_RETURN_NONE;
 }
@@ -170,9 +150,12 @@ static PyObject *py_gfx_read_map(PyObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "s", &path))
         return NULL;
     
-    int res = gfx_read_map(path);
+    if (!gfx_read_map(path)) {
+        PyErr_SetString(PyExc_TypeError, "Cannot read map file");
+        return NULL;
+    }
     
-    return Py_BuildValue("i", res);
+    Py_RETURN_NONE;
 }
 
 static PyObject *py_gfx_write_map(PyObject *self, PyObject *args)
@@ -182,9 +165,12 @@ static PyObject *py_gfx_write_map(PyObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "s", &path))
         return NULL;
     
-    int res = gfx_write_map(path);
+    if (!gfx_write_map(path)) {
+        PyErr_SetString(PyExc_TypeError, "Cannot write map file");
+        return NULL;
+    }
     
-    return Py_BuildValue("i", res);
+    Py_RETURN_NONE;
 }
 
 static PyObject *py_gfx_map_data(PyObject *self, PyObject *args)

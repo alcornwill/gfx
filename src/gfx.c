@@ -80,7 +80,6 @@ static float g_time = 0;
 static float g_dt = 0;
 static Vec2 g_cursor = {0, 0}; // text cursor
 static Vec2 g_camera = {0, 0};
-static int (*g_user_init)() = NULL;
 static int (*g_user_update)() = NULL;
 static int (*g_user_close)() = NULL;
 static WavBuffer g_wavbuffers[NUM_WAVBUFFER] = {0};
@@ -402,27 +401,32 @@ void gfx_draw_map() {
     draw_map((screenx+1) * 128, (screeny+1) * 128, (screenx+1) * 16, (screeny+1) * 16);
 }
 
-int gfx_load(int (*init)(), int (*update)(), int (*close)()) {
-    g_user_init = init;
-    g_user_update = update;
-    g_user_close = close;
-    return 1;
-}
-
-static void init_sdl() {
-    // initialize SDL
+static int init_sdl() {
+    // init SDL
 	if(SDL_Init(SDL_INIT_VIDEO) < 0)
 	{
 		printf("SDL could not initialize! SDL Error: %s\n", SDL_GetError());
-		exit(1);
+		return 0;
 	}
     
-    SDL_AudioInit("directsound");
+    // init audio
+    if (SDL_AudioInit("directsound") < 0) 
+    {
+        printf("SDL audio failed to initialize! SDL Error: %s\n", SDL_GetError());
+        return 0;
+    }
+    
+    if (SDL_OpenAudio(&g_spec, NULL) < 0){
+        printf("Couldn't open audio: %s\n", SDL_GetError());
+        return 0;
+    }
+    // todo validate spec
 	
     // set point sampling
     if(!SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0" ))
     {
-        printf("Warning: Point texture filtering not enabled! SDL Error: %s\n", SDL_GetError());
+        printf("Point texture filtering not enabled! SDL Error: %s\n", SDL_GetError());
+        return 0;
     }
 
     // create window
@@ -430,7 +434,7 @@ static void init_sdl() {
     if(!g_window)
     {
         printf("Window could not be created! SDL Error: %s\n", SDL_GetError());
-        exit(1);
+        return 0;
     }
     
     // create renderer for window
@@ -438,7 +442,7 @@ static void init_sdl() {
     if(!g_renderer)
     {
         printf("Renderer could not be created! SDL Error: %s\n", SDL_GetError());
-        exit(1);
+        return 0;
     }
 
     // init SDL_Image
@@ -450,6 +454,8 @@ static void init_sdl() {
         // printf("SDL_image could not initialize! SDL_image Error: %s\n", IMG_GetError());
         // exit(1);
     // }
+    
+    return 1;
 }
 
 void gfx_load_wav(char *path, int index) {
@@ -465,13 +471,69 @@ void gfx_load_wav(char *path, int index) {
     wav->spec.samples = AUDIO_SAMPLES;
 }
 
-static void init_audio() {
-    if (SDL_OpenAudio(&g_spec, NULL) < 0){
-        printf("Couldn't open audio: %s\n", SDL_GetError());
-        exit(-1);
+static int init_layers() {
+    // initialize layers (render textures)
+    for (int i=0; i<NUM_LAYERS; ++i) {
+        g_layers[i] = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, SCREEN_WIDTH, SCREEN_HEIGHT);
+        if (!g_layers[i]) {
+            printf("Failed to initialize layer %d! SDL Error: %s\n", i, SDL_GetError());
+            return 0;
+        }
+    }
+    return 1;
+}
+    
+int gfx_load_spritesheet(char *path)
+{
+    // NOTE don't call twice, doesn't free existing... (todo)
+    
+	SDL_Surface *surface = IMG_Load(path);
+	if(!surface)
+	{
+		printf("Unable to load spritesheet! SDL_image Error: %s\n", IMG_GetError());
+        return 0;
+	}
+    
+    
+    // hmm, even indexed image isn't loaded as indexed...
+    // printf("Palette info:\n");
+    // SDL_Palette *palette = surface->format->palette;
+    // if (!palette) {
+        // printf("No palette\n");
+    // } else {
+        // for (int i=0; i<palette->ncolors; ++i) {
+            // SDL_Color *c = &palette->colors[i];
+            // printf("%i, %i, %i, %i\n", c->r, c->g, c->b, c->a);
+        // }
+    // }
+    
+    // create texture from surface pixels
+    g_spritesheet_texture_nk = SDL_CreateTextureFromSurface(g_renderer, surface);
+    if(!g_spritesheet_texture_nk)
+    {
+        printf("Unable to create texture from spritesheet surface! SDL Error: %s\n", SDL_GetError());
+        return 0;
     }
     
-    // todo validate spec
+    // do chroma keyed version...
+    // color key image 
+    SDL_SetColorKey(surface, 1, SDL_MapRGB( surface->format, 0, 0, 0 )); // NOTE color key = black
+    g_spritesheet_texture_k = SDL_CreateTextureFromSurface(g_renderer, surface);
+    if(!g_spritesheet_texture_k)
+    {
+        printf("Unable to create texture from spritesheet surface! SDL Error: %s\n", SDL_GetError());
+        return 0;
+    }
+    
+    // free surface
+    SDL_FreeSurface(surface);
+    
+    
+    // init stuff
+    gfx_set_color(0);
+    gfx_set_key(0);
+    
+    return 1;
 }
 
 static void gfx_close()
@@ -507,67 +569,32 @@ static void gfx_close()
 	SDL_Quit();
 }
 
-static void init_layers() {
-    // initialize layers (render textures)
-    for (int i=0; i<NUM_LAYERS; ++i) {
-        g_layers[i] = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, SCREEN_WIDTH, SCREEN_HEIGHT);
-        if (!g_layers[i]) {
-            printf("Failed to initialize layer %d! SDL Error: %s\n", i, SDL_GetError());
-            exit(1);
-        }
-    }
-}
+int gfx_load(int (*update)(), int (*close)()) {
+    // initialize gfx
+    g_user_update = update;
+    g_user_close = close;
     
-
-void gfx_load_spritesheet(char *path)
-{
-    // NOTE don't call twice, doesn't free existing... (todo)
-    
-	SDL_Surface *surface = IMG_Load(path);
-	if(!surface)
-	{
-		printf("Unable to load spritesheet! SDL_image Error: %s\n", IMG_GetError());
-        exit(1);
-	}
-    
-    
-    // hmm, even indexed image isn't loaded as indexed...
-    // printf("Palette info:\n");
-    // SDL_Palette *palette = surface->format->palette;
-    // if (!palette) {
-        // printf("No palette\n");
-    // } else {
-        // for (int i=0; i<palette->ncolors; ++i) {
-            // SDL_Color *c = &palette->colors[i];
-            // printf("%i, %i, %i, %i\n", c->r, c->g, c->b, c->a);
-        // }
-    // }
-    
-    // create texture from surface pixels
-    g_spritesheet_texture_nk = SDL_CreateTextureFromSurface(g_renderer, surface);
-    if(!g_spritesheet_texture_nk)
-    {
-        printf("Unable to create texture from spritesheet surface! SDL Error: %s\n", SDL_GetError());
-        exit(1);
+    // init SDL
+    if (!init_sdl()) {
+        printf("Failed to initialize!\n");
+        return 0;
     }
     
-    // do chroma keyed version...
-    // color key image 
-    SDL_SetColorKey(surface, 1, SDL_MapRGB( surface->format, 0, 0, 0 )); // NOTE color key = black
-    g_spritesheet_texture_k = SDL_CreateTextureFromSurface(g_renderer, surface);
-    if(!g_spritesheet_texture_k)
-    {
-        printf("Unable to create texture from spritesheet surface! SDL Error: %s\n", SDL_GetError());
-        exit(1);
+    // SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED, "1");
+    
+    // SDL_Rect rect = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
+    // SDL_RenderSetViewport(g_renderer, &rect);
+    
+    // init layers
+    if (!init_layers()) {
+        printf("Failed to initialze!\n");
+        return 0;
     }
-    
-    // free surface
-    SDL_FreeSurface(surface);
-    
     
     // init stuff
-    gfx_set_color(0);
-    gfx_set_key(0);
+    gfx_set_layer(0);
+    
+    return 1;
 }
 
 void gfx_quit() {
@@ -576,29 +603,6 @@ void gfx_quit() {
 
 int gfx_mainloop() {
     int success = 1;
-    
-    // init SDL
-    init_sdl();
-    
-    // SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED, "1");
-    
-    // SDL_Rect rect = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
-    // SDL_RenderSetViewport(g_renderer, &rect);
-    
-    // init audio
-    init_audio();
-    
-    // init layers
-    init_layers();
-    
-    // init stuff
-    gfx_set_layer(0);
-    
-    // user init callback
-    if (!g_user_init()) {
-        g_quit = 1;
-        success = 0;
-    }
 
     //Event handler
     SDL_Event e;
